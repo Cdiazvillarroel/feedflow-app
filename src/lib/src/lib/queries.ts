@@ -353,3 +353,4 @@ export async function createAlert(alert: Omit<Alert, 'id' | 'acknowledged' | 'tr
   if (error) { console.error('createAlert:', error); return false }
   return true
 }
+
