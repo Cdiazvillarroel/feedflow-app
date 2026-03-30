@@ -71,8 +71,14 @@ export default function AlertsPage() {
                 </div>
               </div>
               <div style={{ flexShrink: 0 }}>
-                <button onClick={() => setAcked(prev => new Set([...prev, a.id]))} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid #c8d8cc', background: acked.has(a.id) ? '#eaf5ee' : 'transparent', color: acked.has(a.id) ? '#27500A' : '#6a7a8a', cursor: 'pointer' }}>
-                  {acked.has(a.id) ? '✓ Acknowledged' : 'Acknowledge'}
+                <button
+  onClick={() =>
+    setAcked(prev => {
+      const next = new Set(prev)
+      next.add(a.id)
+      return next
+    })
+  }
                 </button>
               </div>
             </div>
