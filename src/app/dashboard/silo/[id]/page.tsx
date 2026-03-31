@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   getSiloById,
@@ -34,14 +35,9 @@ function levelColor(pct: number) {
   return pct <= 20 ? '#E24B4A' : pct <= 40 ? '#EF9F27' : '#4CAF7D'
 }
 
-type Props = {
-  params: {
-    id: string
-  }
-}
-
-export default function SiloPage({ params }: Props) {
-  const id = params.id
+export default function SiloPage() {
+  const params = useParams()
+  const id = String(params?.id ?? '')
 
   const [silo, setSilo] = useState<Silo | null>(null)
   const [reading, setReading] = useState<Reading | null>(null)
@@ -51,7 +47,11 @@ export default function SiloPage({ params }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!id) return
+
     async function load() {
+      setLoading(true)
+
       const [s, r, h, sen, consumption] = await Promise.all([
         getSiloById(id),
         getLatestReading(id),
