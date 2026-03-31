@@ -3,12 +3,10 @@ import { useEffect, useState } from 'react'
 import { getAnimalGroups, getFeedPrices, updateAnimalCount } from '@/lib/queries'
 import type { AnimalGroup, FeedPrice } from '@/lib/types'
 
-// Rations matched to the demo farm's actual group names from Supabase
 const RATIONS: Record<string, { material: string; kgPerHead: number; color: string }[]> = {
   'Sows lactating':  [{ material: 'Lactation diet', kgPerHead: 6.5, color: '#4CAF7D' }],
   'Sows gestating':  [{ material: 'Gestation diet', kgPerHead: 2.5, color: '#4A90C4' }],
   'Gilt developers': [{ material: 'Gestation diet', kgPerHead: 2.0, color: '#4A90C4' }],
-  // Generic fallbacks
   'Lactating sows':  [{ material: 'Lactation diet', kgPerHead: 6.5, color: '#4CAF7D' }],
   'Gestating sows':  [{ material: 'Gestation diet', kgPerHead: 2.5, color: '#4A90C4' }],
   'Grower pigs':     [{ material: 'Lactation diet', kgPerHead: 2.4, color: '#4CAF7D' }, { material: 'Gestation diet', kgPerHead: 0.4, color: '#4A90C4' }],
@@ -36,11 +34,11 @@ function getRations(name: string) {
 }
 
 export default function AnimalsPage() {
-  const [groups,     setGroups]     = useState<AnimalGroup[]>([])
-  const [prices,     setPrices]     = useState<FeedPrice[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [groups,      setGroups]      = useState<AnimalGroup[]>([])
+  const [prices,      setPrices]      = useState<FeedPrice[]>([])
+  const [selectedId,  setSelectedId]  = useState<string | null>(null)
   const [activePhase, setActivePhase] = useState<Record<string, number>>({})
-  const [loading,    setLoading]    = useState(true)
+  const [loading,     setLoading]     = useState(true)
 
   useEffect(() => {
     Promise.all([getAnimalGroups(), getFeedPrices()]).then(([g, p]) => {
@@ -51,8 +49,8 @@ export default function AnimalsPage() {
     })
   }, [])
 
-  const selected  = groups.find(g => g.id === selectedId) || groups[0]
-  const priceMap  = Object.fromEntries(prices.map(p => [p.material, p.price_per_tonne]))
+  const selected = groups.find(g => g.id === selectedId) || groups[0]
+  const priceMap = Object.fromEntries(prices.map(p => [p.material, p.price_per_tonne]))
 
   function dailyFeed(g: AnimalGroup): number {
     return getRations(g.name).reduce((s, r) => s + r.kgPerHead * g.count, 0)
@@ -67,6 +65,10 @@ export default function AnimalsPage() {
 
   function costPerHead(g: AnimalGroup): number {
     return g.count > 0 ? dailyCost(g) / g.count : 0
+  }
+
+  function kgPerHeadTotal(g: AnimalGroup): number {
+    return getRations(g.name).reduce((s, r) => s + r.kgPerHead, 0)
   }
 
   async function handleCountChange(g: AnimalGroup, count: number) {
@@ -164,22 +166,49 @@ export default function AnimalsPage() {
                     <span style={{ fontSize: 26 }}>{g.icon || '🐾'}</span>
                     <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span>
                   </div>
+
                   <div style={{ fontSize: 15, fontWeight: 600, color: '#1a2530', marginBottom: 2 }}>{g.name}</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 10 }}>
                     <span style={{ fontSize: 28, fontWeight: 700, color: '#1a2530', letterSpacing: -1 }}>{g.count.toLocaleString()}</span>
                     <span style={{ fontSize: 12, color: '#aab8c0' }}>animals</span>
                   </div>
+
                   <div style={{ height: '0.5px', background: '#e8ede9', marginBottom: 10 }} />
-                  {[
-                    { k: 'Feed/day',   v: `${Math.round(dailyFeed(g)).toLocaleString()} kg` },
-                    { k: 'Cost/day',   v: `$${Math.round(dailyCost(g)).toLocaleString()}` },
-                    { k: '$/head/day', v: `$${cpp.toFixed(2)}`, green: true },
-                  ].map(r => (
-                    <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
-                      <span style={{ fontSize: 11, color: '#8a9aaa' }}>{r.k}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: (r as any).green ? '#27500A' : '#1a2530' }}>{r.v}</span>
+
+                  {/* kg/head/day — ración individual */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid #f7f9f8' }}>
+                    <span style={{ fontSize: 11, color: '#8a9aaa' }}>kg/head/day</span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: '#1a2530' }}>
+                        {kgPerHeadTotal(g).toFixed(1)}
+                      </span>
+                      <span style={{ fontSize: 10, color: '#aab8c0' }}>kg</span>
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Feed/day total del grupo */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid #f7f9f8' }}>
+                    <span style={{ fontSize: 11, color: '#8a9aaa' }}>Feed/day total</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#1a2530' }}>
+                      {Math.round(dailyFeed(g)).toLocaleString()} kg
+                    </span>
+                  </div>
+
+                  {/* Cost/day */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid #f7f9f8' }}>
+                    <span style={{ fontSize: 11, color: '#8a9aaa' }}>Cost/day</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#1a2530' }}>
+                      ${Math.round(dailyCost(g)).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* $/head/day */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
+                    <span style={{ fontSize: 11, color: '#8a9aaa' }}>$/head/day</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#27500A' }}>
+                      ${cpp.toFixed(2)}
+                    </span>
+                  </div>
                 </button>
               )
             })}
@@ -203,8 +232,8 @@ export default function AnimalsPage() {
                           style={{
                             padding: '4px 10px', borderRadius: 20, fontSize: 11,
                             cursor: 'pointer', border: '0.5px solid',
-                            background: phaseActive ? '#1a2530' : '#fff',
-                            color:      phaseActive ? '#fff'    : '#6a7a8a',
+                            background:  phaseActive ? '#1a2530' : '#fff',
+                            color:       phaseActive ? '#fff'    : '#6a7a8a',
                             borderColor: phaseActive ? '#1a2530' : '#e8ede9',
                             fontFamily: 'inherit',
                           }}
@@ -218,17 +247,19 @@ export default function AnimalsPage() {
 
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr>{['Material', 'kg/head/day', '% of ration', 'Daily total', 'Daily cost'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 12px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>
-                    ))}</tr>
+                    <tr>
+                      {['Material', 'kg/head/day', '% of ration', 'Daily total', 'Daily cost'].map(h => (
+                        <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 12px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>
+                      ))}
+                    </tr>
                   </thead>
                   <tbody>
                     {getRations(selected.name).map(r => {
                       const totalKgHead = getRations(selected.name).reduce((s, x) => s + x.kgPerHead, 0)
-                      const pct      = totalKgHead > 0 ? Math.round(r.kgPerHead / totalKgHead * 100) : 100
-                      const totalKg  = r.kgPerHead * selected.count
-                      const price    = priceMap[r.material] || 520
-                      const cost     = totalKg / 1000 * price
+                      const pct     = totalKgHead > 0 ? Math.round(r.kgPerHead / totalKgHead * 100) : 100
+                      const totalKg = r.kgPerHead * selected.count
+                      const price   = priceMap[r.material] || 520
+                      const cost    = totalKg / 1000 * price
                       return (
                         <tr key={r.material}>
                           <td style={{ padding: '12px', borderBottom: '0.5px solid #f0f4f0' }}>
@@ -279,9 +310,12 @@ export default function AnimalsPage() {
                 <div className="card-header"><div className="card-title">Cost summary</div></div>
 
                 <div style={{ background: '#f4fbf7', borderRadius: 10, padding: '16px', marginBottom: 16, textAlign: 'center' }}>
-                  <div style={{ fontSize: 11, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>Cost per head per day</div>
+                  <div style={{ fontSize: 11, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Cost per head per day</div>
                   <div style={{ fontSize: 36, fontWeight: 700, color: '#27500A', letterSpacing: -1.5 }}>
                     ${costPerHead(selected).toFixed(2)}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8a9aaa', marginTop: 4 }}>
+                    {kgPerHeadTotal(selected).toFixed(1)} kg feed/head/day
                   </div>
                 </div>
 
@@ -305,11 +339,11 @@ export default function AnimalsPage() {
                 <div style={{ height: '0.5px', background: '#e8ede9', marginBottom: 14 }} />
 
                 {[
-                  { k: 'Feed / day',    v: `${Math.round(dailyFeed(selected)).toLocaleString()} kg` },
-                  { k: 'Cost / day',    v: `$${Math.round(dailyCost(selected)).toLocaleString()}`,    g: true },
-                  { k: 'Cost / week',   v: `$${Math.round(dailyCost(selected) * 7).toLocaleString()}`, g: true },
-                  { k: 'Cost / month',  v: `$${Math.round(dailyCost(selected) * 30).toLocaleString()}`, g: true },
-                  { k: 'Cost / year',   v: `$${Math.round(dailyCost(selected) * 365).toLocaleString()}`, g: true },
+                  { k: 'Feed / day',   v: `${Math.round(dailyFeed(selected)).toLocaleString()} kg` },
+                  { k: 'Cost / day',   v: `$${Math.round(dailyCost(selected)).toLocaleString()}`,             g: true },
+                  { k: 'Cost / week',  v: `$${Math.round(dailyCost(selected) * 7).toLocaleString()}`,         g: true },
+                  { k: 'Cost / month', v: `$${Math.round(dailyCost(selected) * 30).toLocaleString()}`,        g: true },
+                  { k: 'Cost / year',  v: `$${Math.round(dailyCost(selected) * 365).toLocaleString()}`,       g: true },
                 ].map(r => (
                   <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f0f4f0' }}>
                     <span style={{ fontSize: 12, color: '#8a9aaa' }}>{r.k}</span>
@@ -317,6 +351,7 @@ export default function AnimalsPage() {
                   </div>
                 ))}
               </div>
+
             </div>
           )}
         </>
