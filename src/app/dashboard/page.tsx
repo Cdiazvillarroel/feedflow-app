@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { getSilosWithReadings, getFarmSummary } from '@/lib/queries'
 import type { SiloWithReading, FarmSummary } from '@/lib/types'
 import SiloDrawer from './SiloDrawer'
+import AIInsightCard from '@/components/AIInsightCard'
 
 function levelColor(pct: number) {
   return pct <= 20 ? '#E24B4A' : pct <= 40 ? '#EF9F27' : '#4CAF7D'
@@ -76,7 +77,6 @@ export default function DashboardPage() {
 
   return (
     <>
-      {/* ── PAGE HEADER ─────────────────────────────────────────── */}
       <div className="page-header">
         <div>
           <div className="page-title">Silo Dashboard</div>
@@ -92,7 +92,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── SUMMARY CARDS ───────────────────────────────────────── */}
+      <AIInsightCard page="dashboard" />
+
       <div className="summary-row">
         <div className="sum-card">
           <div className="sum-label">Total silos</div>
@@ -116,9 +117,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── FILTERS ─────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        {/* Search */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '0.5px solid #c8d8cc', borderRadius: 6, padding: '0 10px', flex: 1, maxWidth: 260 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#aab8c0" strokeWidth="1.5">
             <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -132,7 +131,6 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Filter pills */}
         {['all', 'critical', 'low', 'ok'].map(f => {
           const count = f === 'all' ? silos.length : silos.filter(s => s.alert_level === f).length
           const active = filter === f
@@ -148,15 +146,11 @@ export default function DashboardPage() {
                 color: active ? '#fff' : '#6a7a8a',
               }}
             >
-              {f === 'all' ? `All (${count})`
-                : f === 'critical' ? `Critical (${count})`
-                : f === 'low' ? `Low (${count})`
-                : `OK (${count})`}
+              {f === 'all' ? `All (${count})` : f === 'critical' ? `Critical (${count})` : f === 'low' ? `Low (${count})` : `OK (${count})`}
             </button>
           )
         })}
 
-        {/* Sort */}
         <select
           value={sort}
           onChange={e => setSort(e.target.value)}
@@ -168,7 +162,6 @@ export default function DashboardPage() {
         </select>
       </div>
 
-      {/* ── SILO LIST ───────────────────────────────────────────── */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8a9aaa' }}>
           <div style={{ fontSize: 32, marginBottom: 12 }}>📡</div>
@@ -177,7 +170,6 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Column headers */}
           <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 100px 110px 110px 80px', gap: 12, padding: '0 16px 8px', marginBottom: 2 }}>
             {['Silo / Material', 'Level', 'Days left', 'Sensor', 'Last reading', ''].map(h => (
               <div key={h} style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>{h}</div>
@@ -190,19 +182,12 @@ export default function DashboardPage() {
                 key={s.id}
                 onClick={() => openSilo(s.id)}
                 style={{
-                  background: '#fff',
-                  borderRadius: 10,
-                  padding: '14px 16px',
-                  display: 'grid',
-                  gridTemplateColumns: '180px 1fr 100px 110px 110px 80px',
-                  gap: 12,
-                  alignItems: 'center',
-                  border: '0.5px solid #e8ede9',
+                  background: '#fff', borderRadius: 10, padding: '14px 16px',
+                  display: 'grid', gridTemplateColumns: '180px 1fr 100px 110px 110px 80px',
+                  gap: 12, alignItems: 'center', border: '0.5px solid #e8ede9',
                   borderLeft: `3px solid ${borderColor(s.alert_level)}`,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'box-shadow 0.15s, background 0.15s',
-                  width: '100%',
+                  cursor: 'pointer', textAlign: 'left',
+                  transition: 'box-shadow 0.15s, background 0.15s', width: '100%',
                 }}
                 onMouseEnter={e => {
                   (e.currentTarget as HTMLElement).style.background = '#fafdfb'
@@ -213,13 +198,10 @@ export default function DashboardPage() {
                   ;(e.currentTarget as HTMLElement).style.boxShadow = 'none'
                 }}
               >
-                {/* Name */}
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2530', marginBottom: 2 }}>{s.name}</div>
                   <div style={{ fontSize: 11, color: '#8a9aaa' }}>{s.material}</div>
                 </div>
-
-                {/* Level bar */}
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                     <span style={{ fontSize: 14, fontWeight: 600, color: levelColor(s.level_pct) }}>{s.level_pct.toFixed(1)}%</span>
@@ -229,31 +211,21 @@ export default function DashboardPage() {
                     <div style={{ height: '100%', borderRadius: 3, background: levelColor(s.level_pct), width: `${s.level_pct}%` }} />
                   </div>
                 </div>
-
-                {/* Days */}
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: 20, fontWeight: 700, color: s.days_remaining <= 7 ? '#A32D2D' : s.days_remaining <= 14 ? '#633806' : '#27500A' }}>
                     {s.days_remaining}
                   </div>
                   <div style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase', letterSpacing: '0.3px' }}>days</div>
                 </div>
-
-                {/* Sensor */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.sensor?.status === 'online' ? '#4CAF7D' : s.sensor?.status === 'delayed' ? '#EF9F27' : '#E24B4A' }} />
                   <div style={{ fontSize: 11, color: '#8a9aaa' }}>
                     {s.sensor?.status === 'online' ? 'Online' : s.sensor?.status === 'delayed' ? 'Delayed' : s.sensor ? 'Offline' : 'No sensor'}
                   </div>
                 </div>
-
-                {/* Last reading */}
                 <div style={{ fontSize: 11, color: '#aab8c0', textAlign: 'center' }}>
-                  {s.hours_since_reading < 1 ? 'Just now'
-                    : s.hours_since_reading < 24 ? `${Math.round(s.hours_since_reading)}h ago`
-                    : `${Math.round(s.hours_since_reading / 24)}d ago`}
+                  {s.hours_since_reading < 1 ? 'Just now' : s.hours_since_reading < 24 ? `${Math.round(s.hours_since_reading)}h ago` : `${Math.round(s.hours_since_reading / 24)}d ago`}
                 </div>
-
-                {/* CTA */}
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: 11, color: '#4CAF7D', fontWeight: 600 }}>View →</span>
                 </div>
@@ -263,12 +235,7 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* ── DRAWER ──────────────────────────────────────────────── */}
-      <SiloDrawer
-        siloId={selectedSiloId}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
+      <SiloDrawer siloId={selectedSiloId} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
     </>
   )
 }
