@@ -37,7 +37,8 @@ function levelColor(pct: number) {
 
 export default function SiloPage() {
   const params = useParams()
-  const id = String(params?.id ?? '')
+  const rawId = params?.id
+  const id = decodeURIComponent(Array.isArray(rawId) ? rawId[0] : String(rawId ?? ''))
 
   const [silo, setSilo] = useState<Silo | null>(null)
   const [reading, setReading] = useState<Reading | null>(null)
@@ -47,10 +48,15 @@ export default function SiloPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!id) return
+    if (!id) {
+      setLoading(false)
+      return
+    }
 
     async function load() {
       setLoading(true)
+
+      console.log('Silo detail param id:', id)
 
       const [s, r, h, sen, consumption] = await Promise.all([
         getSiloById(id),
@@ -59,6 +65,8 @@ export default function SiloPage() {
         getSensorBySiloId(id),
         getDailyConsumption(id),
       ])
+
+      console.log('Silo detail loaded:', { id, silo: s, reading: r, sensor: sen })
 
       setSilo(s)
       setReading(r)
@@ -91,10 +99,32 @@ export default function SiloPage() {
   if (!silo) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#8a9aaa' }}>
-        Silo not found.{' '}
-        <Link href="/dashboard" style={{ color: '#4A90C4' }}>
-          Back to dashboard
-        </Link>
+        <div style={{ fontSize: 18, fontWeight: 600, color: '#1a2530', marginBottom: 8 }}>
+          Silo not found
+        </div>
+        <div style={{ fontSize: 13, marginBottom: 14 }}>
+          Requested silo ID:
+        </div>
+        <div
+          style={{
+            display: 'inline-block',
+            padding: '8px 12px',
+            borderRadius: 8,
+            background: '#f7f9f8',
+            border: '0.5px solid #e5e7eb',
+            color: '#374151',
+            fontFamily: 'monospace',
+            fontSize: 12,
+            marginBottom: 18,
+          }}
+        >
+          {id || '(empty)'}
+        </div>
+        <div>
+          <Link href="/dashboard" style={{ color: '#4A90C4', textDecoration: 'none' }}>
+            Back to dashboard
+          </Link>
+        </div>
       </div>
     )
   }
@@ -129,10 +159,7 @@ export default function SiloPage() {
           marginBottom: 16,
         }}
       >
-        <Link
-          href="/dashboard"
-          style={{ color: '#aab8c0', textDecoration: 'none' }}
-        >
+        <Link href="/dashboard" style={{ color: '#aab8c0', textDecoration: 'none' }}>
           ← Dashboard
         </Link>
         <span>›</span>
