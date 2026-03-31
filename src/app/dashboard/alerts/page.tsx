@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { getAlerts, acknowledgeAlert } from '@/lib/queries'
 import type { Alert } from '@/lib/types'
+import AIInsightCard from '@/components/AIInsightCard'
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
@@ -9,17 +10,12 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getAlerts().then(data => {
-      setAlerts(data)
-      setLoading(false)
-    })
+    getAlerts().then(data => { setAlerts(data); setLoading(false) })
   }, [])
 
   async function handleAck(id: string) {
     const ok = await acknowledgeAlert(id)
-    if (ok) {
-      setAlerts(prev => prev.map(a => a.id === id ? { ...a, acknowledged: true, acked_at: new Date().toISOString() } : a))
-    }
+    if (ok) setAlerts(prev => prev.map(a => a.id === id ? { ...a, acknowledged: true, acked_at: new Date().toISOString() } : a))
   }
 
   async function handleAckAll() {
@@ -28,15 +24,13 @@ export default function AlertsPage() {
     setAlerts(prev => prev.map(a => ({ ...a, acknowledged: true })))
   }
 
-  const unread = alerts.filter(a => !a.acknowledged).length
+  const unread   = alerts.filter(a => !a.acknowledged).length
   const filtered = filter === 'all' ? alerts : alerts.filter(a => a.type === filter)
 
-  const bgColor = (type: string) => type === 'critical' ? '#FCEBEB' : type === 'warning' ? '#FAEEDA' : '#f7f9f8'
+  const bgColor   = (type: string) => type === 'critical' ? '#FCEBEB' : type === 'warning' ? '#FAEEDA' : '#f7f9f8'
   const iconColor = (type: string) => type === 'critical' ? '#A32D2D' : type === 'warning' ? '#633806' : '#aab8c0'
 
-  if (loading) {
-    return <div style={{ padding: 60, textAlign: 'center', color: '#8a9aaa' }}>Loading alerts...</div>
-  }
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#8a9aaa' }}>Loading alerts...</div>
 
   return (
     <>
@@ -50,6 +44,8 @@ export default function AlertsPage() {
           <button className="btn-primary">+ New alarm rule</button>
         </div>
       </div>
+
+      <AIInsightCard page="alerts" />
 
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Unread</div><div className="sum-val red">{unread}</div><div className="sum-sub">Require attention</div></div>
@@ -77,7 +73,9 @@ export default function AlertsPage() {
           {filtered.map(a => (
             <div key={a.id} style={{ display: 'flex', gap: 14, padding: '14px 16px', background: '#fff', borderRadius: 8, border: '0.5px solid #e8ede9', borderLeft: !a.acknowledged ? `3px solid ${a.type === 'critical' ? '#E24B4A' : '#EF9F27'}` : '0.5px solid #e8ede9' }}>
               <div style={{ width: 36, height: 36, borderRadius: '50%', background: bgColor(a.type), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={iconColor(a.type)} strokeWidth="1.5" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={iconColor(a.type)} strokeWidth="1.5" strokeLinecap="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
