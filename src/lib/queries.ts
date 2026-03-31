@@ -4,24 +4,20 @@ import type {
   AnimalGroup, FeedPrice, SiloWithReading, SiloLatestReading, FarmSummary
 } from './types'
 
-// Default farm ID — Granja El Roble demo
-// In production this comes from the logged-in user's session
 export const DEFAULT_FARM_ID = 'f0000001-0000-0000-0000-000000000001'
 
 // ─── DAILY CONSUMPTION ESTIMATE ──────────────────────────────────────────────
-// Calculates kg/day from last 2 readings
-function estimateDailyConsumption(readings: Reading[]): number {
-  if (readings.length < 2) return 400 // fallback default
-  const latest = readings[0]
+function estimateDailyConsumption(readings: { kg_remaining: number; recorded_at: string }[]): number {
+  if (readings.length < 2) return 400
+  const latest   = readings[0]
   const previous = readings[1]
   const hoursDiff =
     (new Date(latest.recorded_at).getTime() -
-      new Date(previous.recorded_at).getTime()) /
-    (1000 * 60 * 60)
+      new Date(previous.recorded_at).getTime()) / 3600000
   if (hoursDiff <= 0) return 400
   const kgConsumed = previous.kg_remaining - latest.kg_remaining
-  const kgPerHour = kgConsumed / hoursDiff
-  return Math.max(0, Math.round(kgPerHour * 24))
+  if (kgConsumed <= 0) return 400 // delivery event or no change — skip
+  return Math.max(50, Math.round((kgConsumed / hoursDiff) * 24))
 }
 
 // ─── FARMS ────────────────────────────────────────────────────────────────────
@@ -32,10 +28,7 @@ export async function getFarm(farmId = DEFAULT_FARM_ID): Promise<Farm | null> {
     .select('*')
     .eq('id', farmId)
     .single()
-  if (error) {
-    console.error('getFarm:', error)
-    return null
-  }
+  if (error) { console.error('getFarm:', error); return null }
   return data
 }
 
@@ -45,10 +38,7 @@ export async function getFarmSummary(farmId = DEFAULT_FARM_ID): Promise<FarmSumm
     .select('*')
     .eq('farm_id', farmId)
     .single()
-  if (error) {
-    console.error('getFarmSummary:', error)
-    return null
-  }
+  if (error) { console.error('getFarmSummary:', error); return null }
   return data
 }
 
@@ -60,11 +50,7 @@ export async function getSilos(farmId = DEFAULT_FARM_ID): Promise<Silo[]> {
     .select('*')
     .eq('farm_id', farmId)
     .order('name')
-
-  if (error) {
-    console.error('getSilos:', error)
-    return []
-  }
+  if (error) { console.error('getSilos:', error); return [] }
   return data || []
 }
 
@@ -74,28 +60,44 @@ export async function getSiloById(siloId: string): Promise<Silo | null> {
     .select('*')
     .eq('id', siloId)
     .single()
-  if (error) {
-    console.error('getSiloById:', error)
-    return null
-  }
+  if (error) { console.error('getSiloById:', error); return null }
   return data
 }
 
-// Get all silos with their latest reading enriched
+// Get all silos with their latest reading — uses REAL consumption per silo
 export async function getSilosWithReadings(farmId = DEFAULT_FARM_ID): Promise<SiloWithReading[]> {
+
+  // 1. Latest reading per silo (from Supabase view)
   const { data: latestReadings, error: lrError } = await supabase
     .from('silo_latest_readings')
     .select('*')
-
   if (lrError) console.error('getSilosWithReadings view:', lrError)
 
+  // 2. Silos for this farm
   const silos = await getSilos(farmId)
 
+  // 3. Sensors
   const { data: sensors, error: sensorsError } = await supabase
     .from('sensors')
     .select('*')
-
   if (sensorsError) console.error('getSilosWithReadings sensors:', sensorsError)
+
+  // 4. Last 4 readings per silo to calculate real daily consumption
+  //    One batch query — avoids N+1
+  const siloIds = silos.map(s => s.id)
+  const { data: recentReadings } = await supabase
+    .from('readings')
+    .select('silo_id, kg_remaining, recorded_at')
+    .in('silo_id', siloIds)
+    .order('recorded_at', { ascending: false })
+    .limit(siloIds.length * 4)
+
+  // Group recent readings by silo_id
+  const readingsBySilo: Record<string, { kg_remaining: number; recorded_at: string }[]> = {}
+  for (const r of recentReadings || []) {
+    if (!readingsBySilo[r.silo_id]) readingsBySilo[r.silo_id] = []
+    if (readingsBySilo[r.silo_id].length < 4) readingsBySilo[r.silo_id].push(r)
+  }
 
   return silos.map(silo => {
     const lr = (latestReadings || []).find(
@@ -105,33 +107,34 @@ export async function getSilosWithReadings(farmId = DEFAULT_FARM_ID): Promise<Si
       (s: Sensor) => s.silo_id === silo.id
     )
 
-    const level_pct = lr?.level_pct ?? 0
+    const level_pct    = lr?.level_pct    ?? 0
     const kg_remaining = lr?.kg_remaining ?? 0
-    const kgDay = 400
+    const hours_since  = lr?.hours_since_reading ?? 999
+
+    // Calculate real consumption from recent readings
+    const siloReadings = readingsBySilo[silo.id] || []
+    const kgDay = estimateDailyConsumption(siloReadings)
     const days_remaining = kgDay > 0 ? Math.floor(kg_remaining / kgDay) : 0
-    const hours_since = lr?.hours_since_reading ?? 999
 
     return {
       ...silo,
-      latest_reading: lr
-        ? {
-            id: '',
-            sensor_id: '',
-            silo_id: silo.id,
-            level_pct: lr.level_pct,
-            kg_remaining: lr.kg_remaining,
-            cubic_meters: lr.cubic_meters,
-            distance_cm: lr.distance_cm,
-            valid: lr.valid,
-            error_type: lr.error_type,
-            recorded_at: lr.recorded_at,
-          }
-        : null,
-      sensor: sensor || null,
+      latest_reading: lr ? {
+        id: '',
+        sensor_id: '',
+        silo_id: silo.id,
+        level_pct:    lr.level_pct,
+        kg_remaining: lr.kg_remaining,
+        cubic_meters: lr.cubic_meters,
+        distance_cm:  lr.distance_cm,
+        valid:        lr.valid,
+        error_type:   lr.error_type,
+        recorded_at:  lr.recorded_at,
+      } : null,
+      sensor:          sensor || null,
       level_pct,
       kg_remaining,
       days_remaining,
-      alert_level: lr?.alert_level ?? 'ok',
+      alert_level:        lr?.alert_level ?? 'ok',
       hours_since_reading: hours_since,
     } as SiloWithReading
   })
@@ -147,32 +150,20 @@ export async function getLatestReading(siloId: string): Promise<Reading | null> 
     .order('recorded_at', { ascending: false })
     .limit(1)
     .single()
-
-  if (error) {
-    console.error('getLatestReading:', error)
-    return null
-  }
+  if (error) { console.error('getLatestReading:', error); return null }
   return data
 }
 
-export async function getReadingHistory(
-  siloId: string,
-  days = 30
-): Promise<Reading[]> {
+export async function getReadingHistory(siloId: string, days = 30): Promise<Reading[]> {
   const since = new Date()
   since.setDate(since.getDate() - days)
-
   const { data, error } = await supabase
     .from('readings')
     .select('*')
     .eq('silo_id', siloId)
     .gte('recorded_at', since.toISOString())
     .order('recorded_at', { ascending: true })
-
-  if (error) {
-    console.error('getReadingHistory:', error)
-    return []
-  }
+  if (error) { console.error('getReadingHistory:', error); return [] }
   return data || []
 }
 
@@ -183,9 +174,8 @@ export async function getDailyConsumption(siloId: string): Promise<number> {
     .eq('silo_id', siloId)
     .order('recorded_at', { ascending: false })
     .limit(10)
-
   if (error || !data || data.length < 2) return 400
-  return estimateDailyConsumption(data as Reading[])
+  return estimateDailyConsumption(data)
 }
 
 export async function getFarmReadings(
@@ -194,30 +184,17 @@ export async function getFarmReadings(
 ): Promise<(Reading & { silo_name: string; material: string })[]> {
   const since = new Date()
   since.setDate(since.getDate() - days)
-
   const { data, error } = await supabase
     .from('readings')
-    .select(`
-      *,
-      silos!inner (
-        name,
-        material,
-        farm_id
-      )
-    `)
+    .select('*, silos!inner(name, material, farm_id)')
     .eq('silos.farm_id', farmId)
     .gte('recorded_at', since.toISOString())
     .order('recorded_at', { ascending: false })
-
-  if (error) {
-    console.error('getFarmReadings:', error)
-    return []
-  }
-
+  if (error) { console.error('getFarmReadings:', error); return [] }
   return (data || []).map((r: any) => ({
     ...r,
-    silo_name: r.silos?.name || '',
-    material: r.silos?.material || '',
+    silo_name: r.silos?.name     || '',
+    material:  r.silos?.material || '',
   }))
 }
 
@@ -228,27 +205,14 @@ export async function getSensors(
 ): Promise<(Sensor & { silo_name: string; silo_lat: number | null; silo_lng: number | null })[]> {
   const { data, error } = await supabase
     .from('sensors')
-    .select(`
-      *,
-      silos!inner (
-        name,
-        lat,
-        lng,
-        farm_id
-      )
-    `)
+    .select('*, silos!inner(name, lat, lng, farm_id)')
     .eq('silos.farm_id', farmId)
-
-  if (error) {
-    console.error('getSensors:', error)
-    return []
-  }
-
+  if (error) { console.error('getSensors:', error); return [] }
   return (data || []).map((s: any) => ({
     ...s,
     silo_name: s.silos?.name || '',
-    silo_lat: s.silos?.lat || null,
-    silo_lng: s.silos?.lng || null,
+    silo_lat:  s.silos?.lat  || null,
+    silo_lng:  s.silos?.lng  || null,
   }))
 }
 
@@ -258,47 +222,29 @@ export async function getSensorBySiloId(siloId: string): Promise<Sensor | null> 
     .select('*')
     .eq('silo_id', siloId)
     .single()
-
-  if (error) {
-    console.error('getSensorBySiloId:', error)
-    return null
-  }
+  if (error) { console.error('getSensorBySiloId:', error); return null }
   return data
 }
 
 // ─── ALERTS ───────────────────────────────────────────────────────────────────
 
-export async function getAlerts(
-  farmId = DEFAULT_FARM_ID,
-  limit = 50
-): Promise<Alert[]> {
+export async function getAlerts(farmId = DEFAULT_FARM_ID, limit = 50): Promise<Alert[]> {
   const { data, error } = await supabase
     .from('alerts')
     .select('*')
     .eq('farm_id', farmId)
     .order('triggered_at', { ascending: false })
     .limit(limit)
-
-  if (error) {
-    console.error('getAlerts:', error)
-    return []
-  }
+  if (error) { console.error('getAlerts:', error); return [] }
   return data || []
 }
 
 export async function acknowledgeAlert(alertId: string): Promise<boolean> {
   const { error } = await supabase
     .from('alerts')
-    .update({
-      acknowledged: true,
-      acked_at: new Date().toISOString(),
-    })
+    .update({ acknowledged: true, acked_at: new Date().toISOString() })
     .eq('id', alertId)
-
-  if (error) {
-    console.error('acknowledgeAlert:', error)
-    return false
-  }
+  if (error) { console.error('acknowledgeAlert:', error); return false }
   return true
 }
 
@@ -310,11 +256,7 @@ export async function getAlarmRules(farmId = DEFAULT_FARM_ID): Promise<AlarmRule
     .select('*')
     .eq('farm_id', farmId)
     .order('created_at')
-
-  if (error) {
-    console.error('getAlarmRules:', error)
-    return []
-  }
+  if (error) { console.error('getAlarmRules:', error); return [] }
   return data || []
 }
 
@@ -323,11 +265,7 @@ export async function toggleAlarmRule(ruleId: string, active: boolean): Promise<
     .from('alarm_rules')
     .update({ active })
     .eq('id', ruleId)
-
-  if (error) {
-    console.error('toggleAlarmRule:', error)
-    return false
-  }
+  if (error) { console.error('toggleAlarmRule:', error); return false }
   return true
 }
 
@@ -339,11 +277,7 @@ export async function getAnimalGroups(farmId = DEFAULT_FARM_ID): Promise<AnimalG
     .select('*')
     .eq('farm_id', farmId)
     .order('name')
-
-  if (error) {
-    console.error('getAnimalGroups:', error)
-    return []
-  }
+  if (error) { console.error('getAnimalGroups:', error); return [] }
   return data || []
 }
 
@@ -352,11 +286,7 @@ export async function updateAnimalCount(groupId: string, count: number): Promise
     .from('animal_groups')
     .update({ count, updated_at: new Date().toISOString() })
     .eq('id', groupId)
-
-  if (error) {
-    console.error('updateAnimalCount:', error)
-    return false
-  }
+  if (error) { console.error('updateAnimalCount:', error); return false }
   return true
 }
 
@@ -368,11 +298,7 @@ export async function getFeedPrices(farmId = DEFAULT_FARM_ID): Promise<FeedPrice
     .select('*')
     .eq('farm_id', farmId)
     .order('material')
-
-  if (error) {
-    console.error('getFeedPrices:', error)
-    return []
-  }
+  if (error) { console.error('getFeedPrices:', error); return [] }
   return data || []
 }
 
@@ -384,37 +310,20 @@ export async function updateFeedPrice(
   const { error } = await supabase
     .from('feed_prices')
     .upsert(
-      {
-        farm_id: farmId,
-        material,
-        price_per_tonne: price,
-        updated_at: new Date().toISOString(),
-      },
+      { farm_id: farmId, material, price_per_tonne: price, updated_at: new Date().toISOString() },
       { onConflict: 'farm_id,material' }
     )
-
-  if (error) {
-    console.error('updateFeedPrice:', error)
-    return false
-  }
+  if (error) { console.error('updateFeedPrice:', error); return false }
   return true
 }
 
-// ─── WRITE: Insert a new reading (used by PipeDream) ─────────────────────────
+// ─── WRITE ────────────────────────────────────────────────────────────────────
 
 export async function insertReading(reading: Omit<Reading, 'id'>): Promise<boolean> {
-  const { error } = await supabase
-    .from('readings')
-    .insert(reading)
-
-  if (error) {
-    console.error('insertReading:', error)
-    return false
-  }
+  const { error } = await supabase.from('readings').insert(reading)
+  if (error) { console.error('insertReading:', error); return false }
   return true
 }
-
-// ─── WRITE: Create alert ──────────────────────────────────────────────────────
 
 export async function createAlert(
   alert: Omit<Alert, 'id' | 'acknowledged' | 'triggered_at' | 'acked_at' | 'acked_by'>
@@ -422,10 +331,6 @@ export async function createAlert(
   const { error } = await supabase
     .from('alerts')
     .insert({ ...alert, acknowledged: false })
-
-  if (error) {
-    console.error('createAlert:', error)
-    return false
-  }
+  if (error) { console.error('createAlert:', error); return false }
   return true
 }
