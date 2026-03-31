@@ -56,12 +56,15 @@ export default function SiloDrawer({
     async function load() {
       setLoading(true)
 
+      const currentSiloId = siloId
+      if (!currentSiloId) return
+
       const [s, r, h, sen, consumption] = await Promise.all([
-        getSiloById(siloId),
-        getLatestReading(siloId),
-        getReadingHistory(siloId, 30),
-        getSensorBySiloId(siloId),
-        getDailyConsumption(siloId),
+        getSiloById(currentSiloId),
+        getLatestReading(currentSiloId),
+        getReadingHistory(currentSiloId, 30),
+        getSensorBySiloId(currentSiloId),
+        getDailyConsumption(currentSiloId),
       ])
 
       setSilo(s)
@@ -430,18 +433,20 @@ export default function SiloDrawer({
                 )}
               </div>
 
-              <Link
-                href={`/dashboard/silo/${id}`}
-                style={{
-                  display: 'inline-block',
-                  textDecoration: 'none',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: '#4A90C4',
-                }}
-              >
-                Open full silo page →
-              </Link>
+              {siloId && (
+                <Link
+                  href={`/dashboard/silo/${siloId}`}
+                  style={{
+                    display: 'inline-block',
+                    textDecoration: 'none',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#4A90C4',
+                  }}
+                >
+                  Open full silo page →
+                </Link>
+              )}
             </>
           )}
         </div>
