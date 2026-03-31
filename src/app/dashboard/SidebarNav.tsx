@@ -34,15 +34,17 @@ export default function SidebarNav() {
 
   return (
     <aside style={{
-      width: 220,
-      flexShrink: 0,
-      background: '#ffffff',
-      borderRight: '0.5px solid #e5e7eb',
-      display: 'flex',
-      flexDirection: 'column',
-      padding: '20px 0',
-      overflowY: 'auto',
-    }}>
+        width: 220,
+        minWidth: 220,
+        flexShrink: 0,
+        background: '#ffffff',
+        borderRight: '1px solid #e5e7eb',
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '20px 0',
+        overflowY: 'auto',
+        minHeight: 'calc(100vh - 56px)',
+      }}>
 
       {NAV.map(group => (
         <div key={group.section} style={{ marginBottom: 8 }}>
