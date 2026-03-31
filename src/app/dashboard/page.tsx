@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { getSilosWithReadings, getFarmSummary } from '@/lib/queries'
 import type { SiloWithReading, FarmSummary } from '@/lib/types'
+import SiloDrawer from './SiloDrawer'
 
 export default function DashboardPage() {
   const [silos, setSilos] = useState<SiloWithReading[]>([])
@@ -13,6 +14,9 @@ export default function DashboardPage() {
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('name')
+
+  const [selectedSiloId, setSelectedSiloId] = useState<string | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -67,6 +71,15 @@ export default function DashboardPage() {
   const critical = silos.filter(s => s.alert_level === 'critical').length
   const low = silos.filter(s => s.alert_level === 'low').length
   const totalKg = silos.reduce((sum, s) => sum + (s.kg_remaining || 0), 0)
+
+  function openSilo(id: string) {
+    setSelectedSiloId(id)
+    setDrawerOpen(true)
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false)
+  }
 
   if (loading) {
     return (
@@ -287,9 +300,9 @@ export default function DashboardPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {filtered.map(s => (
-              <Link
+              <button
                 key={s.id}
-                href={`/dashboard/silo/${s.id}`}
+                onClick={() => openSilo(s.id)}
                 style={{
                   background: '#fff',
                   borderRadius: 10,
@@ -298,9 +311,10 @@ export default function DashboardPage() {
                   gridTemplateColumns: '200px 1fr 120px 130px 110px 100px',
                   gap: 16,
                   alignItems: 'center',
-                  textDecoration: 'none',
                   border: '0.5px solid #e8ede9',
                   borderLeft: `3px solid ${borderColor(s.alert_level)}`,
+                  cursor: 'pointer',
+                  textAlign: 'left',
                 }}
               >
                 <div>
@@ -444,11 +458,17 @@ export default function DashboardPage() {
                     View →
                   </span>
                 </div>
-              </Link>
+              </button>
             ))}
           </div>
         </>
       )}
+
+      <SiloDrawer
+        siloId={selectedSiloId}
+        open={drawerOpen}
+        onClose={closeDrawer}
+      />
     </>
   )
 }
