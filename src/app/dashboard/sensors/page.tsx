@@ -2,39 +2,34 @@
 import { useEffect, useState } from 'react'
 import { getSensors } from '@/lib/queries'
 import type { Sensor } from '@/lib/types'
+import AIInsightCard from '@/components/AIInsightCard'
 
 type SensorWithSilo = Sensor & { silo_name: string; silo_lat: number | null; silo_lng: number | null }
 
 export default function SensorsPage() {
-  const [sensors, setSensors] = useState<SensorWithSilo[]>([])
+  const [sensors,  setSensors]  = useState<SensorWithSilo[]>([])
   const [selected, setSelected] = useState<SensorWithSilo | null>(null)
-  const [filter, setFilter] = useState('all')
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [filter,   setFilter]   = useState('all')
+  const [search,   setSearch]   = useState('')
+  const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
-    getSensors().then(data => {
-      setSensors(data)
-      if (data.length > 0) setSelected(data[0])
-      setLoading(false)
-    })
+    getSensors().then(data => { setSensors(data); if (data.length > 0) setSelected(data[0]); setLoading(false) })
   }, [])
 
-  const online = sensors.filter(s => s.status === 'online').length
-  const delayed = sensors.filter(s => s.status === 'delayed').length
-  const lowBatt = sensors.filter(s => s.battery_pct < 60).length
+  const online   = sensors.filter(s => s.status === 'online').length
+  const delayed  = sensors.filter(s => s.status === 'delayed').length
+  const lowBatt  = sensors.filter(s => s.battery_pct < 60).length
 
   let filtered = [...sensors]
   if (filter !== 'all') filtered = filtered.filter(s => s.status === filter)
   if (search) filtered = filtered.filter(s => s.silo_name.toLowerCase().includes(search) || s.serial.toLowerCase().includes(search))
 
   const statusColor = (s: string) => s === 'online' ? '#27500A' : s === 'delayed' ? '#633806' : '#A32D2D'
-  const statusBg = (s: string) => s === 'online' ? '#eaf5ee' : s === 'delayed' ? '#FAEEDA' : '#FCEBEB'
-  const battColor = (b: number) => b >= 70 ? '#4CAF7D' : b >= 40 ? '#EF9F27' : '#E24B4A'
+  const statusBg    = (s: string) => s === 'online' ? '#eaf5ee' : s === 'delayed' ? '#FAEEDA' : '#FCEBEB'
+  const battColor   = (b: number) => b >= 70 ? '#4CAF7D' : b >= 40 ? '#EF9F27' : '#E24B4A'
 
-  if (loading) {
-    return <div style={{ padding: 60, textAlign: 'center', color: '#8a9aaa' }}>Loading sensors...</div>
-  }
+  if (loading) return <div style={{ padding: 60, textAlign: 'center', color: '#8a9aaa' }}>Loading sensors...</div>
 
   return (
     <>
@@ -49,6 +44,8 @@ export default function SensorsPage() {
         </div>
       </div>
 
+      <AIInsightCard page="sensors" />
+
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Total</div><div className="sum-val">{sensors.length}</div><div className="sum-sub">Registered sensors</div></div>
         <div className="sum-card"><div className="sum-label">Online</div><div className="sum-val green">{online}</div><div className="sum-sub">Transmitting normally</div></div>
@@ -56,7 +53,6 @@ export default function SensorsPage() {
         <div className="sum-card"><div className="sum-label">Low battery</div><div className={`sum-val ${lowBatt > 0 ? 'amber' : 'green'}`}>{lowBatt}</div><div className="sum-sub">Below 60%</div></div>
       </div>
 
-      {/* SELECTED SENSOR DETAIL */}
       {selected && (
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -68,7 +64,8 @@ export default function SensorsPage() {
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               {selected.silo_lat && selected.silo_lng && (
-                <a href={`https://www.google.com/maps?q=${selected.silo_lat},${selected.silo_lng}`} target="_blank" rel="noreferrer" style={{ padding: '7px 14px', border: '0.5px solid #B5D4F4', borderRadius: 6, fontSize: 12, color: '#4A90C4', background: '#fff', textDecoration: 'none' }}>
+                <a href={`https://www.google.com/maps?q=${selected.silo_lat},${selected.silo_lng}`} target="_blank" rel="noreferrer"
+                  style={{ padding: '7px 14px', border: '0.5px solid #B5D4F4', borderRadius: 6, fontSize: 12, color: '#4A90C4', background: '#fff', textDecoration: 'none' }}>
                   View on map
                 </a>
               )}
@@ -78,7 +75,7 @@ export default function SensorsPage() {
             {[
               { label: 'Status', val: selected.status.charAt(0).toUpperCase() + selected.status.slice(1), cls: selected.status },
               { label: 'Battery', val: `${selected.battery_pct}%`, cls: selected.battery_pct >= 70 ? 'green' : selected.battery_pct >= 40 ? 'amber' : 'red' },
-              { label: 'Signal', val: ['—', 'Weak', 'Fair', 'Good'][selected.signal_strength] ?? '—', cls: selected.signal_strength === 3 ? 'green' : 'amber' },
+              { label: 'Signal', val: ['—','Weak','Fair','Good'][selected.signal_strength] ?? '—', cls: selected.signal_strength === 3 ? 'green' : 'amber' },
               { label: 'Last seen', val: new Date(selected.last_seen_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), cls: '' },
             ].map(d => (
               <div key={d.label} style={{ background: '#f7f9f8', borderRadius: 8, padding: '12px 14px' }}>
@@ -92,15 +89,15 @@ export default function SensorsPage() {
         </div>
       )}
 
-      {/* TABLE */}
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">All sensors</div></div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#f7f9f8', border: '0.5px solid #e8ede9', borderRadius: 6, padding: '0 10px', width: 220 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#aab8c0" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" placeholder="Search silo or serial..." value={search} onChange={e => setSearch(e.target.value.toLowerCase())} style={{ border: 'none', outline: 'none', fontSize: 12, color: '#1a2530', background: 'transparent', width: '100%', padding: '7px 0' }} />
+            <input type="text" placeholder="Search silo or serial..." value={search} onChange={e => setSearch(e.target.value.toLowerCase())}
+              style={{ border: 'none', outline: 'none', fontSize: 12, color: '#1a2530', background: 'transparent', width: '100%', padding: '7px 0' }} />
           </div>
-          {['all', 'online', 'delayed', 'offline'].map(f => (
+          {['all','online','delayed','offline'].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{ padding: '5px 11px', borderRadius: 20, fontSize: 11, cursor: 'pointer', border: '0.5px solid', borderColor: filter === f ? '#1a2530' : '#e8ede9', background: filter === f ? '#1a2530' : '#fff', color: filter === f ? '#fff' : '#6a7a8a' }}>
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
@@ -108,18 +105,14 @@ export default function SensorsPage() {
         </div>
 
         {sensors.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#8a9aaa', fontSize: 13 }}>
-            No sensors registered yet. Add sensor serial numbers to start receiving data.
-          </div>
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#8a9aaa', fontSize: 13 }}>No sensors registered yet.</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {['Silo', 'Status', 'Battery', 'Signal', 'Serial', 'Last seen', ''].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontSize: 11, color: '#aab8c0', fontWeight: 500, padding: '0 12px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
+            <thead><tr>
+              {['Silo','Status','Battery','Signal','Serial','Last seen',''].map(h => (
+                <th key={h} style={{ textAlign: 'left', fontSize: 11, color: '#aab8c0', fontWeight: 500, padding: '0 12px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>
+              ))}
+            </tr></thead>
             <tbody>
               {filtered.map(s => (
                 <tr key={s.id} onClick={() => setSelected(s)} style={{ cursor: 'pointer', background: selected?.id === s.id ? '#eaf5ee' : '#fff' }}>
@@ -140,7 +133,7 @@ export default function SensorsPage() {
                   </td>
                   <td style={{ padding: 12, borderBottom: '0.5px solid #f0f4f0' }}>
                     <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
-                      {[1,2,3].map(b => <div key={b} style={{ width: 4, height: b * 5 + 2, borderRadius: 1, background: b <= s.signal_strength ? '#4CAF7D' : '#e8ede9' }} />)}
+                      {[1,2,3].map(b => <div key={b} style={{ width: 4, height: b*5+2, borderRadius: 1, background: b <= s.signal_strength ? '#4CAF7D' : '#e8ede9' }} />)}
                     </div>
                   </td>
                   <td style={{ padding: 12, borderBottom: '0.5px solid #f0f4f0', fontSize: 11, color: '#8a9aaa', fontFamily: 'monospace' }}>{s.serial}</td>
@@ -149,9 +142,8 @@ export default function SensorsPage() {
                   </td>
                   <td style={{ padding: 12, borderBottom: '0.5px solid #f0f4f0' }}>
                     {s.silo_lat && s.silo_lng && (
-                      <a href={`https://www.google.com/maps?q=${s.silo_lat},${s.silo_lng}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid #c8d8cc', color: '#4A90C4', textDecoration: 'none' }}>
-                        Map
-                      </a>
+                      <a href={`https://www.google.com/maps?q=${s.silo_lat},${s.silo_lng}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                        style={{ fontSize: 11, padding: '4px 10px', borderRadius: 4, border: '0.5px solid #c8d8cc', color: '#4A90C4', textDecoration: 'none' }}>Map</a>
                     )}
                   </td>
                 </tr>
