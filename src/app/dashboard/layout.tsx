@@ -1,4 +1,5 @@
 import SidebarNav from './SidebarNav'
+import Link from 'next/link'
 
 export default function DashboardLayout({
   children,
@@ -23,7 +24,7 @@ export default function DashboardLayout({
         flexShrink: 0,
         zIndex: 10,
       }}>
-        <a href="/dashboard" style={{
+        <Link href="/dashboard" style={{
           fontSize: 20,
           fontWeight: 600,
           color: '#ffffff',
@@ -32,9 +33,9 @@ export default function DashboardLayout({
           marginRight: 'auto',
         }}>
           Feed<span style={{ color: '#4CAF7D' }}>Flow</span>
-        </a>
+        </Link>
 
-        <a href="/dashboard/alerts" style={{
+        <Link href="/dashboard/alerts" style={{
           position: 'relative',
           width: 34,
           height: 34,
@@ -60,7 +61,7 @@ export default function DashboardLayout({
             background: '#ef4444',
             border: '1.5px solid #1a2530',
           }} />
-        </a>
+        </Link>
 
         <div style={{
           width: 34, height: 34,
@@ -81,7 +82,7 @@ export default function DashboardLayout({
       {/* BODY */}
       <div style={{ display: 'flex', flex: 1, minHeight: 'calc(100vh - 56px)' }}>
 
-        {/* SIDEBAR — client component for active state */}
+        {/* SIDEBAR */}
         <SidebarNav />
 
         {/* MAIN CONTENT */}
