@@ -1,15 +1,12 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const url  = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? ''
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
-const svc  = process.env.SUPABASE_SERVICE_ROLE_KEY ?? ''
+const url  = process.env.NEXT_PUBLIC_SUPABASE_URL  || 'https://placeholder.supabase.co'
+const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
+const svc  = process.env.SUPABASE_SERVICE_ROLE_KEY || anon
 
-export const supabase = url && anon
-  ? createClient(url, anon)
-  : null
-
-export const supabaseAdmin = url && svc
-  ? createClient(url, svc)
-  : supabase
-
-export const isConfigured = Boolean(url && anon)
+export const supabase: SupabaseClient = createClient(url, anon)
+export const supabaseAdmin: SupabaseClient = createClient(url, svc)
+export const isConfigured = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
