@@ -79,7 +79,7 @@ export default function DashboardLayout({
       </header>
 
       {/* BODY */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+      <div style={{ display: 'flex', flex: 1, minHeight: 'calc(100vh - 56px)' }}>
 
         {/* SIDEBAR — client component for active state */}
         <SidebarNav />
