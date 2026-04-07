@@ -99,4 +99,131 @@ export default function SidebarNav() {
               {item.badge && !isAI && (
                 <span style={{
                   background: '#ef4444', color: '#fff',
-                  font
+                  fontSize: 10, fontWeight: 700,
+                  padding: '1px 6px', borderRadius: 10,
+                }}>
+                  {item.badge}
+                </span>
+              )}
+            </Link>
+          )
+        })}
+      </div>
+
+      {/* FARM SELECTOR */}
+      <div style={{ margin: '0 10px', position: 'relative' }}>
+
+        {/* Trigger button */}
+        <button
+          onClick={() => setDropdownOpen(prev => !prev)}
+          style={{
+            width: '100%', padding: '10px 12px',
+            background: '#f9fafb',
+            border: `1px solid ${dropdownOpen ? '#4CAF7D' : '#e5e7eb'}`,
+            borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+            transition: 'border-color 0.15s',
+          }}
+        >
+          <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Current farm
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {loading ? 'Loading...' : currentFarm?.name ?? 'Select farm'}
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5"
+              style={{ flexShrink: 0, transform: dropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </div>
+          {currentFarm?.location && (
+            <p style={{ fontSize: 11, color: '#9ca3af', margin: '3px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentFarm.location}
+            </p>
+          )}
+        </button>
+
+        {/* Dropdown */}
+        {dropdownOpen && (
+          <>
+            {/* Backdrop to close */}
+            <div
+              onClick={() => setDropdownOpen(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+            />
+            <div style={{
+              position: 'absolute',
+              bottom: 'calc(100% + 6px)',
+              left: 0, right: 0,
+              background: '#fff',
+              border: '1px solid #e5e7eb',
+              borderRadius: 10,
+              boxShadow: '0 -8px 24px rgba(0,0,0,0.10)',
+              overflow: 'hidden',
+              zIndex: 100,
+            }}>
+              <div style={{ padding: '8px 12px 6px', borderBottom: '0.5px solid #f0f4f0' }}>
+                <span style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600 }}>
+                  Switch farm
+                </span>
+              </div>
+
+              {loading ? (
+                <div style={{ padding: '12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
+                  Loading farms...
+                </div>
+              ) : farms.length === 0 ? (
+                <div style={{ padding: '12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
+                  No farms found
+                </div>
+              ) : (
+                farms.map(farm => {
+                  const selected = farm.id === currentFarm?.id
+                  return (
+                    <button
+                      key={farm.id}
+                      onClick={() => {
+                        setDropdownOpen(false)
+                        if (!selected) setCurrentFarm(farm)
+                      }}
+                      style={{
+                        width: '100%', padding: '10px 12px',
+                        background: selected ? '#f0fdf4' : '#fff',
+                        border: 'none', textAlign: 'left',
+                        cursor: selected ? 'default' : 'pointer',
+                        borderBottom: '0.5px solid #f7f9f8',
+                        transition: 'background 0.1s',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{
+                          width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                          background: selected ? '#4CAF7D' : '#e5e7eb',
+                        }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: selected ? 600 : 400, color: selected ? '#166534' : '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {farm.name}
+                          </div>
+                          {farm.location && (
+                            <div style={{ fontSize: 11, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 1 }}>
+                              {farm.location}
+                            </div>
+                          )}
+                        </div>
+                        {selected && (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4CAF7D" strokeWidth="2.5" strokeLinecap="round">
+                            <path d="M20 6L9 17l-5-5"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </aside>
+  )
+}
