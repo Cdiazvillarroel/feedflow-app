@@ -4,7 +4,6 @@ import { getSilosWithReadings, getFarmReadings, getFeedPrices } from '@/lib/quer
 import type { SiloWithReading, Reading, FeedPrice } from '@/lib/types'
 import { Line, Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Filler, Tooltip, Legend } from 'chart.js'
-import AIInsightCard from '@/components/AIInsightCard'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Filler, Tooltip, Legend)
 
@@ -83,7 +82,7 @@ export default function AnalyticsPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Analytics</div>
-          <div className="page-sub">Consumption trends · Material breakdown · AI predictions</div>
+          <div className="page-sub">Consumption trends · Material breakdown · Restock predictions</div>
         </div>
         <div className="page-actions">
           <select value={period} onChange={e => setPeriod(Number(e.target.value))} style={{ border: '0.5px solid #c8d8cc', borderRadius: 6, padding: '7px 12px', fontSize: 12, color: '#6a7a8a', background: '#fff', fontFamily: 'inherit' }}>
@@ -94,8 +93,6 @@ export default function AnalyticsPage() {
           <button className="btn-outline">Export CSV</button>
         </div>
       </div>
-
-      <AIInsightCard page="analytics" />
 
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Total available</div><div className="sum-val">{(totalKg/1000).toFixed(1)} t</div><div className="sum-sub">Across all silos</div></div>
