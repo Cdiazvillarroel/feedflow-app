@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react'
 import { getSensors } from '@/lib/queries'
 import type { Sensor } from '@/lib/types'
-import AIInsightCard from '@/components/AIInsightCard'
 
 type SensorWithSilo = Sensor & { silo_name: string; silo_lat: number | null; silo_lng: number | null }
 
@@ -44,8 +43,6 @@ export default function SensorsPage() {
         </div>
       </div>
 
-      <AIInsightCard page="sensors" />
-
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Total</div><div className="sum-val">{sensors.length}</div><div className="sum-sub">Registered sensors</div></div>
         <div className="sum-card"><div className="sum-label">Online</div><div className="sum-val green">{online}</div><div className="sum-sub">Transmitting normally</div></div>
@@ -73,9 +70,9 @@ export default function SensorsPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 12 }}>
             {[
-              { label: 'Status', val: selected.status.charAt(0).toUpperCase() + selected.status.slice(1), cls: selected.status },
-              { label: 'Battery', val: `${selected.battery_pct}%`, cls: selected.battery_pct >= 70 ? 'green' : selected.battery_pct >= 40 ? 'amber' : 'red' },
-              { label: 'Signal', val: ['—','Weak','Fair','Good'][selected.signal_strength] ?? '—', cls: selected.signal_strength === 3 ? 'green' : 'amber' },
+              { label: 'Status',    val: selected.status.charAt(0).toUpperCase() + selected.status.slice(1), cls: selected.status },
+              { label: 'Battery',   val: `${selected.battery_pct}%`, cls: selected.battery_pct >= 70 ? 'green' : selected.battery_pct >= 40 ? 'amber' : 'red' },
+              { label: 'Signal',    val: ['—','Weak','Fair','Good'][selected.signal_strength] ?? '—', cls: selected.signal_strength === 3 ? 'green' : 'amber' },
               { label: 'Last seen', val: new Date(selected.last_seen_at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), cls: '' },
             ].map(d => (
               <div key={d.label} style={{ background: '#f7f9f8', borderRadius: 8, padding: '12px 14px' }}>
