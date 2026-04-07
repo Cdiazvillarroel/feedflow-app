@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getActiveFarmId } from '@/lib/queries'
 
-// ── TYPES ─────────────────────────────────────────────────────────────────────
 interface Farm        { id: string; name: string; location: string | null; lat: number | null; lng: number | null; timezone: string }
 interface Silo        { id: string; farm_id: string; name: string; material: string | null; capacity_kg: number; digitplan_silo_id: number | null; active: boolean }
 interface Sensor      { id: string; silo_id: string; serial: string; model: string; status: string; battery_pct: number; signal_strength: number }
@@ -23,7 +22,6 @@ function labelStyle(): React.CSSProperties {
   return { display: 'block', fontSize: 11, fontWeight: 600, color: '#6a7a8a', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 5 } as React.CSSProperties
 }
 
-// ── MAIN PAGE ─────────────────────────────────────────────────────────────────
 export default function AccountPage() {
   const [tab,     setTab]     = useState<Tab>('farms')
   const [farms,   setFarms]   = useState<Farm[]>([])
@@ -170,7 +168,6 @@ function FarmsTab({ farms, onRefresh, onMsg, activeFarmId }: { farms: Farm[]; on
           </div>
         )}
       </div>
-
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">{editing ? 'Edit farm' : 'New farm'}</div></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -291,7 +288,6 @@ function SilosTab({ silos, farms, onRefresh, onMsg, activeFarmId }: { silos: Sil
           </table>
         )}
       </div>
-
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">{editing ? 'Edit silo' : 'New silo'}</div></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -429,7 +425,6 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
           </table>
         )}
       </div>
-
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">{editing ? 'Edit sensor' : 'Enroll sensor'}</div></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -561,7 +556,6 @@ function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId }: { animal
           </table>
         )}
       </div>
-
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">{editing ? 'Edit group' : 'New group'}</div></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -620,14 +614,14 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
   }
 
   const empty = { email: '', password: '', role: 'viewer', farm_ids: [] as string[] }
-  const [users,    setUsers]    = useState<UserRow[]>([])
-  const [form,     setForm]     = useState(empty)
-  const [loading,  setLoading]  = useState(true)
-  const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState('')
-  const [drawer,   setDrawer]   = useState<UserRow | null>(null)
-  const [editPass, setEditPass] = useState('')
-  const [editFarms, setEditFarms] = useState<{ farm_id: string; role: string }[]>([])
+  const [users,      setUsers]      = useState<UserRow[]>([])
+  const [form,       setForm]       = useState(empty)
+  const [loading,    setLoading]    = useState(true)
+  const [saving,     setSaving]     = useState(false)
+  const [error,      setError]      = useState('')
+  const [drawer,     setDrawer]     = useState<UserRow | null>(null)
+  const [editPass,   setEditPass]   = useState('')
+  const [editFarms,  setEditFarms]  = useState<any[]>([])
   const [savingEdit, setSavingEdit] = useState(false)
 
   useEffect(() => { loadUsers() }, [])
@@ -663,39 +657,28 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
     setEditPass('')
     setEditFarms(farms.map(f => {
       const existing = u.user_farms.find(uf => uf.farm_id === f.id)
-      return { farm_id: f.id, role: existing?.role || 'viewer', assigned: !!existing } as any
+      return { farm_id: f.id, role: existing?.role || 'viewer', assigned: !!existing }
     }))
   }
 
   async function saveDrawer() {
     if (!drawer) return
     setSavingEdit(true)
-
-    // Update password if filled
     if (editPass.trim()) {
       await fetch('/api/admin/update-user', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: drawer.id, password: editPass }),
       })
     }
-
-    // Sync farm assignments
-    const assignedFarms = (editFarms as any[]).filter(f => f.assigned)
-    const removedFarms  = (editFarms as any[]).filter(f => !f.assigned)
-
-    // Remove unassigned
-    for (const f of removedFarms) {
+    for (const f of editFarms.filter((f: any) => !f.assigned)) {
       await supabase.from('user_farms').delete().eq('user_id', drawer.id).eq('farm_id', f.farm_id)
     }
-
-    // Upsert assigned
-    for (const f of assignedFarms) {
+    for (const f of editFarms.filter((f: any) => f.assigned)) {
       await supabase.from('user_farms').upsert(
         { user_id: drawer.id, farm_id: f.farm_id, role: f.role },
         { onConflict: 'user_id,farm_id' }
       )
     }
-
     setSavingEdit(false)
     setDrawer(null)
     onMsg('User updated')
@@ -714,15 +697,6 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
     loadUsers()
   }
 
-  function toggleFarmCreate(farmId: string) {
-    setForm(p => ({
-      ...p,
-      farm_ids: p.farm_ids.includes(farmId)
-        ? p.farm_ids.filter(id => id !== farmId)
-        : [...p.farm_ids, farmId],
-    }))
-  }
-
   async function createUser() {
     if (!form.email || !form.password || form.farm_ids.length === 0) {
       setError('Email, password and at least one farm are required')
@@ -739,7 +713,6 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
     setForm(empty); setSaving(false); loadUsers()
   }
 
-  const ROLES     = ['owner', 'manager', 'viewer']
   const roleBadge = (r: string) =>
     r === 'owner'   ? { bg: '#eaf5ee', color: '#27500A' } :
     r === 'manager' ? { bg: '#E6F1FB', color: '#0C447C' } :
@@ -747,14 +720,10 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
 
   return (
     <>
-      {/* DRAWER */}
       {drawer && (
         <>
-          <div onClick={() => setDrawer(null)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }} />
+          <div onClick={() => setDrawer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }} />
           <div style={{ position: 'fixed', top: 0, right: 0, width: 420, height: '100vh', background: '#fff', zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)' }}>
-
-            {/* Drawer header */}
             <div style={{ padding: '20px 24px', borderBottom: '0.5px solid #e8ede9', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: '50%', background: '#1a2530', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                 {drawer.email.charAt(0).toUpperCase()}
@@ -770,28 +739,17 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
                 ✕
               </button>
             </div>
-
-            {/* Drawer body */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-
-              {/* Reset password */}
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>Reset password</div>
-                <input
-                  type="password" value={editPass}
-                  onChange={e => setEditPass(e.target.value)}
-                  placeholder="New password (leave blank to keep current)"
-                  style={{ ...inputStyle(true) }}
-                />
+                <input type="password" value={editPass} onChange={e => setEditPass(e.target.value)}
+                  placeholder="New password (leave blank to keep current)" style={{ ...inputStyle(true) }} />
               </div>
-
               <div style={{ height: '0.5px', background: '#e8ede9', marginBottom: 24 }} />
-
-              {/* Farm assignments */}
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>Farm access & roles</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {(editFarms as any[]).map((ef, idx) => {
+                  {editFarms.map((ef: any, idx: number) => {
                     const farm = farms.find(f => f.id === ef.farm_id)
                     if (!farm) return null
                     const badge = roleBadge(ef.role)
@@ -825,8 +783,6 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
                 </div>
               </div>
             </div>
-
-            {/* Drawer footer */}
             <div style={{ padding: '16px 24px', borderTop: '0.5px solid #e8ede9', display: 'flex', gap: 10 }}>
               <button onClick={saveDrawer} disabled={savingEdit}
                 style={{ flex: 1, padding: '10px', background: savingEdit ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -841,10 +797,7 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
         </>
       )}
 
-      {/* MAIN LAYOUT */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
-
-        {/* USER LIST */}
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header">
             <div className="card-title">Users with access</div>
@@ -865,20 +818,17 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{u.email}</div>
                     <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 2 }}>
-                      {u.user_farms.length === 0
-                        ? 'No farms assigned'
-                        : u.user_farms.map(f => {
-                            const badge = roleBadge(f.role)
-                            return (
-                              <span key={f.farm_id} style={{ marginRight: 8 }}>
-                                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: badge.bg, color: badge.color, fontWeight: 600, marginRight: 3 }}>
-                                  {f.role.charAt(0).toUpperCase() + f.role.slice(1)}
-                                </span>
-                                {f.farm_name}
-                              </span>
-                            )
-                          })
-                      }
+                      {u.user_farms.length === 0 ? 'No farms assigned' : u.user_farms.map(f => {
+                        const badge = roleBadge(f.role)
+                        return (
+                          <span key={f.farm_id} style={{ marginRight: 8 }}>
+                            <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: badge.bg, color: badge.color, fontWeight: 600, marginRight: 3 }}>
+                              {f.role.charAt(0).toUpperCase() + f.role.slice(1)}
+                            </span>
+                            {f.farm_name}
+                          </span>
+                        )
+                      })}
                     </div>
                   </div>
                   <span style={{ fontSize: 12, color: '#4CAF7D', fontWeight: 600 }}>Edit →</span>
@@ -888,7 +838,6 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
           )}
         </div>
 
-        {/* CREATE USER FORM */}
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">Create new user</div></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -904,8 +853,7 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
             </div>
             <div>
               <label style={labelStyle()}>Default role</label>
-              <select style={{ ...inputStyle(true) }} value={form.role}
-                onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
+              <select style={{ ...inputStyle(true) }} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
                 {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
               <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 6, lineHeight: 1.6 }}>
@@ -921,7 +869,8 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
                   const checked = form.farm_ids.includes(f.id)
                   return (
                     <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 10px', borderRadius: 7, border: `0.5px solid ${checked ? '#4CAF7D' : '#e8ede9'}`, background: checked ? '#f4fbf7' : '#fff' }}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleFarmCreate(f.id)}
+                      <input type="checkbox" checked={checked}
+                        onChange={() => setForm(p => ({ ...p, farm_ids: p.farm_ids.includes(f.id) ? p.farm_ids.filter(id => id !== f.id) : [...p.farm_ids, f.id] }))}
                         style={{ accentColor: '#4CAF7D', width: 14, height: 14 }} />
                       <div>
                         <div style={{ fontSize: 13, fontWeight: checked ? 600 : 400, color: '#1a2530' }}>{f.name}</div>
@@ -943,201 +892,5 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
         </div>
       </div>
     </>
-  )
-}
-
-  // ── ÚNICA FUNCIÓN CORREGIDA ────────────────────────────────────────────────
-  async function loadUsers() {
-    setLoading(true)
-    const [ufRes, authRes] = await Promise.all([
-      supabase.from('user_farms').select('user_id, farm_id, role, farms(id, name)'),
-      fetch('/api/admin/list-users'),
-    ])
-    const uf        = ufRes.data || []
-    const authData  = await authRes.json()
-    const authUsers = authData.users || []
-
-    const rows: UserRow[] = authUsers.map((u: any) => ({
-      id:         u.id,
-      email:      u.email,
-      created_at: u.created_at,
-      farms: uf
-        .filter((r: any) => r.user_id === u.id)
-        .map((r: any) => ({
-          farm_id:   r.farm_id,
-          role:      r.role,
-          farm_name: Array.isArray(r.farms)
-            ? r.farms[0]?.name || '—'
-            : r.farms?.name    || '—',
-        })),
-    }))
-
-    setUsers(rows)
-    setLoading(false)
-  }
-
-  function toggleFarm(farmId: string) {
-    setForm(p => ({
-      ...p,
-      farm_ids: p.farm_ids.includes(farmId)
-        ? p.farm_ids.filter(id => id !== farmId)
-        : [...p.farm_ids, farmId],
-    }))
-  }
-
-  async function createUser() {
-    if (!form.email || !form.password || form.farm_ids.length === 0) {
-      setError('Email, password and at least one farm are required')
-      return
-    }
-    setSaving(true)
-    setError('')
-    const res  = await fetch('/api/admin/create-user', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: form.email, password: form.password, role: form.role, farm_ids: form.farm_ids }),
-    })
-    const data = await res.json()
-    if (data.error) { setError(data.error); setSaving(false); return }
-    onMsg('User created')
-    setForm(empty)
-    setSaving(false)
-    loadUsers()
-  }
-
-  async function removeUser(userId: string, email: string) {
-    if (!confirm(`Remove user ${email}?`)) return
-    const res  = await fetch('/api/admin/delete-user', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId }),
-    })
-    const data = await res.json()
-    if (data.error) { onMsg('Error: ' + data.error); return }
-    onMsg('User removed')
-    loadUsers()
-  }
-
-  async function updateRole(userId: string, farmId: string, role: string) {
-    await supabase.from('user_farms').update({ role }).eq('user_id', userId).eq('farm_id', farmId)
-    onMsg('Role updated')
-    loadUsers()
-  }
-
-  async function removeFarmAccess(userId: string, farmId: string) {
-    await supabase.from('user_farms').delete().eq('user_id', userId).eq('farm_id', farmId)
-    onMsg('Farm access removed')
-    loadUsers()
-  }
-
-  const roleBadge = (r: string) =>
-    r === 'owner'   ? { bg: '#eaf5ee', color: '#27500A' } :
-    r === 'manager' ? { bg: '#E6F1FB', color: '#0C447C' } :
-                      { bg: '#f0f4f0', color: '#6a7a8a'  }
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
-      <div className="card" style={{ marginBottom: 0 }}>
-        <div className="card-header">
-          <div className="card-title">Users with access</div>
-          <span style={{ fontSize: 12, color: '#aab8c0' }}>{users.length} users</span>
-        </div>
-        {loading ? (
-          <div style={{ padding: '20px 0', textAlign: 'center', color: '#aab8c0', fontSize: 13 }}>Loading users...</div>
-        ) : users.length === 0 ? (
-          <div style={{ padding: '20px 0', textAlign: 'center', color: '#aab8c0', fontSize: 13 }}>No users yet.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-            {users.map(u => (
-              <div key={u.id} style={{ padding: '14px 0', borderBottom: '0.5px solid #f0f4f0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a2530', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
-                    {u.email.charAt(0).toUpperCase()}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{u.email}</div>
-                    <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>
-                      Joined {new Date(u.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </div>
-                  </div>
-                  <button onClick={() => removeUser(u.id, u.email)}
-                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>
-                    Remove
-                  </button>
-                </div>
-                {u.farms.length === 0 ? (
-                  <div style={{ fontSize: 12, color: '#aab8c0', paddingLeft: 42 }}>No farms assigned</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 42 }}>
-                    {u.farms.map(f => {
-                      const badge = roleBadge(f.role)
-                      return (
-                        <div key={f.farm_id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4CAF7D', flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, color: '#1a2530', flex: 1 }}>{f.farm_name}</span>
-                          <select value={f.role} onChange={e => updateRole(u.id, f.farm_id, e.target.value)}
-                            style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `0.5px solid ${badge.color}44`, background: badge.bg, color: badge.color, fontFamily: 'inherit', cursor: 'pointer' }}>
-                            {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-                          </select>
-                          <button onClick={() => removeFarmAccess(u.id, f.farm_id)}
-                            style={{ fontSize: 10, padding: '3px 7px', borderRadius: 5, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#aab8c0' }}>✕</button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="card" style={{ marginBottom: 0 }}>
-        <div className="card-header"><div className="card-title">Create new user</div></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={labelStyle()}>Email *</label>
-            <input style={inputStyle(true)} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@email.com" />
-          </div>
-          <div>
-            <label style={labelStyle()}>Password *</label>
-            <input style={inputStyle(true)} type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 6 characters" />
-          </div>
-          <div>
-            <label style={labelStyle()}>Default role</label>
-            <select style={{ ...inputStyle(true) }} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
-              {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
-            </select>
-            <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 6, lineHeight: 1.6 }}>
-              <strong style={{ color: '#1a2530' }}>Owner</strong> — full access &nbsp;·&nbsp;
-              <strong style={{ color: '#1a2530' }}>Manager</strong> — edit only &nbsp;·&nbsp;
-              <strong style={{ color: '#1a2530' }}>Viewer</strong> — read only
-            </div>
-          </div>
-          <div>
-            <label style={labelStyle()}>Assign farms * (select at least one)</label>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-              {farms.map(f => {
-                const checked = form.farm_ids.includes(f.id)
-                return (
-                  <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 10px', borderRadius: 7, border: `0.5px solid ${checked ? '#4CAF7D' : '#e8ede9'}`, background: checked ? '#f4fbf7' : '#fff' }}>
-                    <input type="checkbox" checked={checked} onChange={() => toggleFarm(f.id)} style={{ accentColor: '#4CAF7D', width: 14, height: 14 }} />
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: checked ? 600 : 400, color: '#1a2530' }}>{f.name}</div>
-                      {f.location && <div style={{ fontSize: 11, color: '#aab8c0' }}>{f.location}</div>}
-                    </div>
-                  </label>
-                )
-              })}
-            </div>
-          </div>
-          {error && (
-            <div style={{ background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#A32D2D' }}>{error}</div>
-          )}
-          <button onClick={createUser} disabled={saving}
-            style={{ width: '100%', padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
-            {saving ? 'Creating...' : 'Create user'}
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
