@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react'
 import { getAlerts, acknowledgeAlert } from '@/lib/queries'
 import type { Alert } from '@/lib/types'
-import AIInsightCard from '@/components/AIInsightCard'
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<Alert[]>([])
@@ -44,8 +43,6 @@ export default function AlertsPage() {
           <button className="btn-primary">+ New alarm rule</button>
         </div>
       </div>
-
-      <AIInsightCard page="alerts" />
 
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Unread</div><div className="sum-val red">{unread}</div><div className="sum-sub">Require attention</div></div>
