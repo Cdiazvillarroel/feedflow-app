@@ -5,7 +5,6 @@ import Link from 'next/link'
 import { getSilosWithReadings, getFarmSummary } from '@/lib/queries'
 import type { SiloWithReading, FarmSummary } from '@/lib/types'
 import SiloDrawer from './SiloDrawer'
-import AIInsightCard from '@/components/AIInsightCard'
 
 function levelColor(pct: number) {
   return pct <= 20 ? '#E24B4A' : pct <= 40 ? '#EF9F27' : '#4CAF7D'
@@ -15,14 +14,14 @@ function borderColor(alert: string) {
 }
 
 export default function DashboardPage() {
-  const [silos, setSilos]     = useState<SiloWithReading[]>([])
-  const [summary, setSummary] = useState<FarmSummary | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter]   = useState('all')
-  const [search, setSearch]   = useState('')
-  const [sort, setSort]       = useState('name')
+  const [silos,         setSilos]         = useState<SiloWithReading[]>([])
+  const [summary,       setSummary]       = useState<FarmSummary | null>(null)
+  const [loading,       setLoading]       = useState(true)
+  const [filter,        setFilter]        = useState('all')
+  const [search,        setSearch]        = useState('')
+  const [sort,          setSort]          = useState('name')
   const [selectedSiloId, setSelectedSiloId] = useState<string | null>(null)
-  const [drawerOpen, setDrawerOpen]         = useState(false)
+  const [drawerOpen,    setDrawerOpen]    = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -48,9 +47,9 @@ export default function DashboardPage() {
         (s.material || '').toLowerCase().includes(q)
       )
     }
-    if (sort === 'level')      data.sort((a, b) => a.level_pct - b.level_pct)
-    else if (sort === 'days')  data.sort((a, b) => a.days_remaining - b.days_remaining)
-    else                       data.sort((a, b) => a.name.localeCompare(b.name))
+    if (sort === 'level')     data.sort((a, b) => a.level_pct - b.level_pct)
+    else if (sort === 'days') data.sort((a, b) => a.days_remaining - b.days_remaining)
+    else                      data.sort((a, b) => a.name.localeCompare(b.name))
     return data
   }, [silos, filter, search, sort])
 
@@ -92,8 +91,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <AIInsightCard page="dashboard" />
-
       <div className="summary-row">
         <div className="sum-card">
           <div className="sum-label">Total silos</div>
@@ -120,42 +117,25 @@ export default function DashboardPage() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '0.5px solid #c8d8cc', borderRadius: 6, padding: '0 10px', flex: 1, maxWidth: 260 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#aab8c0" strokeWidth="1.5">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-          <input
-            type="text"
-            placeholder="Search silo or material..."
-            value={search}
+          <input type="text" placeholder="Search silo or material..." value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ border: 'none', outline: 'none', fontSize: 12, color: '#1a2530', background: 'transparent', width: '100%', padding: '7px 0' }}
-          />
+            style={{ border: 'none', outline: 'none', fontSize: 12, color: '#1a2530', background: 'transparent', width: '100%', padding: '7px 0' }} />
         </div>
 
         {['all', 'critical', 'low', 'ok'].map(f => {
-          const count = f === 'all' ? silos.length : silos.filter(s => s.alert_level === f).length
+          const count  = f === 'all' ? silos.length : silos.filter(s => s.alert_level === f).length
           const active = filter === f
           return (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              style={{
-                padding: '5px 12px', borderRadius: 20, fontSize: 11, cursor: 'pointer',
-                border: '0.5px solid', fontWeight: active ? 500 : 400,
-                borderColor: active ? '#1a2530' : '#e8ede9',
-                background: active ? '#1a2530' : '#fff',
-                color: active ? '#fff' : '#6a7a8a',
-              }}
-            >
+            <button key={f} onClick={() => setFilter(f)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, cursor: 'pointer', border: '0.5px solid', fontWeight: active ? 500 : 400, borderColor: active ? '#1a2530' : '#e8ede9', background: active ? '#1a2530' : '#fff', color: active ? '#fff' : '#6a7a8a' }}>
               {f === 'all' ? `All (${count})` : f === 'critical' ? `Critical (${count})` : f === 'low' ? `Low (${count})` : `OK (${count})`}
             </button>
           )
         })}
 
-        <select
-          value={sort}
-          onChange={e => setSort(e.target.value)}
-          style={{ border: '0.5px solid #c8d8cc', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#6a7a8a', background: '#fff', marginLeft: 'auto', fontFamily: 'inherit' }}
-        >
+        <select value={sort} onChange={e => setSort(e.target.value)}
+          style={{ border: '0.5px solid #c8d8cc', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#6a7a8a', background: '#fff', marginLeft: 'auto', fontFamily: 'inherit' }}>
           <option value="name">Sort: Name</option>
           <option value="level">Sort: Level (low first)</option>
           <option value="days">Sort: Days remaining</option>
@@ -178,25 +158,10 @@ export default function DashboardPage() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {filtered.map(s => (
-              <button
-                key={s.id}
-                onClick={() => openSilo(s.id)}
-                style={{
-                  background: '#fff', borderRadius: 10, padding: '14px 16px',
-                  display: 'grid', gridTemplateColumns: '180px 1fr 100px 110px 110px 80px',
-                  gap: 12, alignItems: 'center', border: '0.5px solid #e8ede9',
-                  borderLeft: `3px solid ${borderColor(s.alert_level)}`,
-                  cursor: 'pointer', textAlign: 'left',
-                  transition: 'box-shadow 0.15s, background 0.15s', width: '100%',
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = '#fafdfb'
-                  ;(e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)'
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = '#fff'
-                  ;(e.currentTarget as HTMLElement).style.boxShadow = 'none'
-                }}
+              <button key={s.id} onClick={() => openSilo(s.id)}
+                style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', display: 'grid', gridTemplateColumns: '180px 1fr 100px 110px 110px 80px', gap: 12, alignItems: 'center', border: '0.5px solid #e8ede9', borderLeft: `3px solid ${borderColor(s.alert_level)}`, cursor: 'pointer', textAlign: 'left', width: '100%' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = '#fafdfb'; (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = '#fff'; (e.currentTarget as HTMLElement).style.boxShadow = 'none' }}
               >
                 <div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2530', marginBottom: 2 }}>{s.name}</div>
@@ -212,16 +177,12 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 20, fontWeight: 700, color: s.days_remaining <= 7 ? '#A32D2D' : s.days_remaining <= 14 ? '#633806' : '#27500A' }}>
-                    {s.days_remaining}
-                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: s.days_remaining <= 7 ? '#A32D2D' : s.days_remaining <= 14 ? '#633806' : '#27500A' }}>{s.days_remaining}</div>
                   <div style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase', letterSpacing: '0.3px' }}>days</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                   <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.sensor?.status === 'online' ? '#4CAF7D' : s.sensor?.status === 'delayed' ? '#EF9F27' : '#E24B4A' }} />
-                  <div style={{ fontSize: 11, color: '#8a9aaa' }}>
-                    {s.sensor?.status === 'online' ? 'Online' : s.sensor?.status === 'delayed' ? 'Delayed' : s.sensor ? 'Offline' : 'No sensor'}
-                  </div>
+                  <div style={{ fontSize: 11, color: '#8a9aaa' }}>{s.sensor?.status === 'online' ? 'Online' : s.sensor?.status === 'delayed' ? 'Delayed' : s.sensor ? 'Offline' : 'No sensor'}</div>
                 </div>
                 <div style={{ fontSize: 11, color: '#aab8c0', textAlign: 'center' }}>
                   {s.hours_since_reading < 1 ? 'Just now' : s.hours_since_reading < 24 ? `${Math.round(s.hours_since_reading)}h ago` : `${Math.round(s.hours_since_reading / 24)}d ago`}
