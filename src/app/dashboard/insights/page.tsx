@@ -182,4 +182,257 @@ export default function InsightsPage() {
       </div>
 
       {/* FARM + PERIOD FILTER BAR */}
-      <div style={{ display: 'flex', alignItems:
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap', padding: '12px 16px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 10 }}>
+        <span style={{ fontSize: 11, color: '#aab8c0', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Farm</span>
+        <button onClick={() => setSelectedFarm('all')} style={pill(selectedFarm === 'all')}>All farms</button>
+        {farms.map((f, i) => {
+          const on = selectedFarm === f.id
+          return (
+            <button key={f.id} onClick={() => setSelectedFarm(f.id)} style={pill(on, FARM_COLORS[i % FARM_COLORS.length])}>
+              {farmShortName(f.name)}
+            </button>
+          )
+        })}
+
+        <div style={{ width: 1, height: 20, background: '#e8ede9', margin: '0 6px' }} />
+
+        <span style={{ fontSize: 11, color: '#aab8c0', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Period</span>
+        {([7, 30] as const).map(p => (
+          <button key={p} onClick={() => setPeriod(p)} style={pill(period === p)}>
+            {p === 7 ? 'Last 7 days' : 'Last 30 days'}
+          </button>
+        ))}
+      </div>
+
+      {/* EMPTY STATE */}
+      {todayInsights.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '80px 20px', color: '#8a9aaa' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🤖</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: '#1a2530', marginBottom: 8 }}>No insights yet</div>
+          <div style={{ fontSize: 13, maxWidth: 380, margin: '0 auto', lineHeight: 1.6 }}>
+            Run the FeedFlow AI Daily workflow in PipeDream to generate the first insights.
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* TODAY CARDS — one per farm */}
+          {todayInsights.map(ins => {
+            const fc = farmColorMap[ins.farm_id]
+            return (
+              <div key={ins.id} style={{ background: '#1a2530', borderRadius: 12, padding: '20px 22px', marginBottom: 20 }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(76,175,125,0.15)', border: '0.5px solid rgba(76,175,125,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4CAF7D" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        Today's Farm Intelligence
+                        {selectedFarm === 'all' && fc && (
+                          <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 10, background: fc.bg, color: fc.color, fontWeight: 700 }}>
+                            {fc.short}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>
+                        Generated {formatDate(ins.insight_date)} at {formatTime(ins.updated_at)} AEST
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 10, background: 'rgba(76,175,125,0.15)', color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.3)' }}>
+                    Claude AI
+                  </span>
+                </div>
+
+                {/* Priority action */}
+                {ins.insights.critical_action && (
+                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: '12px 16px', marginBottom: 16, borderLeft: '3px solid #4CAF7D' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#4CAF7D', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Priority action</div>
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.82)', lineHeight: 1.5 }}>{ins.insights.critical_action}</div>
+                  </div>
+                )}
+
+                {/* Section grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 10, marginBottom: 12 }}>
+                  {SECTIONS.map(sec => {
+                    const text = ins.insights[sec.key as keyof typeof ins.insights] as string | undefined
+                    if (!text) return null
+                    return (
+                      <div key={sec.key} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '12px 14px', border: '0.5px solid rgba(255,255,255,0.07)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: sec.dot, flexShrink: 0 }} />
+                          <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{sec.label}</span>
+                        </div>
+                        <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.70)', lineHeight: 1.55, margin: 0 }}>{text}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Procurement note */}
+                {ins.insights.procurement_recommendation && (
+                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '12px 16px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.5" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 2 }}>
+                      <rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8l4 2v5h-4M5 17v2m6-2v2"/>
+                    </svg>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>Procurement note</div>
+                      <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', lineHeight: 1.5, margin: 0 }}>{ins.insights.procurement_recommendation}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+
+          {/* TIMELINE / COMPARE */}
+          {timelineByDate.length > 1 && (
+            <div style={{ background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 12, padding: '18px 20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2530' }}>Insight history</div>
+                  <div style={{ fontSize: 12, color: '#8a9aaa', marginTop: 2 }}>{timelineByDate.length} reports</div>
+                </div>
+                <div style={{ display: 'flex', background: '#f0f4f0', borderRadius: 8, padding: 3 }}>
+                  {(['timeline', 'compare'] as const).map(v => (
+                    <button key={v} onClick={() => setView(v)} style={{ padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', fontFamily: 'inherit', background: view === v ? '#1a2530' : 'transparent', color: view === v ? '#fff' : '#6a7a8a', transition: 'all 0.15s' }}>
+                      {v === 'timeline' ? 'Timeline' : 'Compare farms'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* TIMELINE */}
+              {view === 'timeline' && (
+                <div>
+                  {timelineByDate.slice(1).map(([date, insights]) => {
+                    const primary  = insights[0]
+                    const isOpen   = expandedId === primary.id
+                    const critical = insights.some(i =>
+                      i.insights.dashboard?.toLowerCase().includes('critical') ||
+                      i.insights.alerts?.toLowerCase().includes('critical')
+                    )
+                    return (
+                      <div key={date} style={{ borderBottom: '0.5px solid #f0f4f0' }}>
+                        <button
+                          onClick={() => setExpandedId(isOpen ? null : primary.id)}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 0', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <div style={{ width: 88, flexShrink: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{formatDate(date)}</div>
+                            <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>{formatTime(primary.updated_at)}</div>
+                          </div>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: critical ? '#E24B4A' : '#4CAF7D' }} />
+                          <div style={{ flex: 1, fontSize: 12, color: '#6a7a8a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {primary.insights.dashboard || 'No summary available'}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                            {insights.map(i => {
+                              const fc = farmColorMap[i.farm_id]
+                              return fc ? (
+                                <span key={i.id} style={{ fontSize: 10, padding: '1px 7px', borderRadius: 8, background: fc.bg, color: fc.color, fontWeight: 600 }}>{fc.short}</span>
+                              ) : null
+                            })}
+                          </div>
+                          {critical && (
+                            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#FCEBEB', color: '#A32D2D', flexShrink: 0 }}>Action</span>
+                          )}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aab8c0" strokeWidth="2" style={{ flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                            <path d="M6 9l6 6 6-6"/>
+                          </svg>
+                        </button>
+
+                        {isOpen && (
+                          <div style={{ paddingBottom: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            {insights.map(ins => {
+                              const fc = farmColorMap[ins.farm_id]
+                              return (
+                                <div key={ins.id}>
+                                  {insights.length > 1 && fc && (
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: fc.color, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: fc.color }} />{fc.short}
+                                    </div>
+                                  )}
+                                  {ins.insights.critical_action && (
+                                    <div style={{ background: '#fff8f0', border: '0.5px solid rgba(239,159,39,0.3)', borderRadius: 8, padding: '10px 14px', marginBottom: 10, display: 'flex', gap: 8 }}>
+                                      <span style={{ fontSize: 10, fontWeight: 700, color: '#633806', textTransform: 'uppercase', letterSpacing: '0.4px', whiteSpace: 'nowrap', marginTop: 1 }}>Action</span>
+                                      <p style={{ fontSize: 12, color: '#633806', lineHeight: 1.5, margin: 0 }}>{ins.insights.critical_action}</p>
+                                    </div>
+                                  )}
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 8 }}>
+                                    {SECTIONS.map(sec => {
+                                      const text = ins.insights[sec.key as keyof typeof ins.insights] as string | undefined
+                                      if (!text) return null
+                                      return (
+                                        <div key={sec.key} style={{ background: '#f7f9f8', borderRadius: 8, padding: '10px 12px' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 5 }}>
+                                            <div style={{ width: 5, height: 5, borderRadius: '50%', background: sec.dot }} />
+                                            <span style={{ fontSize: 10, fontWeight: 700, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{sec.label}</span>
+                                          </div>
+                                          <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.5, margin: 0 }}>{text}</p>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                  {ins.insights.procurement_recommendation && (
+                                    <div style={{ marginTop: 8, background: '#f7f9f8', borderRadius: 8, padding: '10px 12px', display: 'flex', gap: 8 }}>
+                                      <span style={{ fontSize: 10, fontWeight: 600, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.4px', whiteSpace: 'nowrap', marginTop: 1 }}>Procurement</span>
+                                      <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.5, margin: 0 }}>{ins.insights.procurement_recommendation}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* COMPARE VIEW */}
+              {view === 'compare' && compareData && (
+                <div>
+                  <div style={{ fontSize: 12, color: '#8a9aaa', marginBottom: 14 }}>
+                    Comparing farms — {formatDate(compareData.date)}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(compareData.insights.length, 3)}, minmax(0,1fr))`, gap: 14 }}>
+                    {compareData.insights.map(ins => {
+                      const fc = farmColorMap[ins.farm_id]
+                      return (
+                        <div key={ins.id} style={{ border: `0.5px solid ${fc?.color || '#e8ede9'}44`, borderRadius: 10, padding: 16, background: fc?.bg || '#f7f9f8' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: fc?.color || '#aab8c0' }} />
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{fc?.short || 'Farm'}</span>
+                          </div>
+                          {ins.insights.critical_action && (
+                            <div style={{ background: 'rgba(0,0,0,0.04)', borderRadius: 6, padding: '8px 10px', marginBottom: 12, borderLeft: `2px solid ${fc?.color}` }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: fc?.color, textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 3 }}>Action</div>
+                              <p style={{ fontSize: 12, color: '#1a2530', lineHeight: 1.5, margin: 0 }}>{ins.insights.critical_action}</p>
+                            </div>
+                          )}
+                          {SECTIONS.map(sec => {
+                            const text = ins.insights[sec.key as keyof typeof ins.insights] as string | undefined
+                            if (!text) return null
+                            return (
+                              <div key={sec.key} style={{ padding: '7px 0', borderBottom: '0.5px solid rgba(0,0,0,0.06)' }}>
+                                <div style={{ fontSize: 10, fontWeight: 700, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 3 }}>{sec.label}</div>
+                                <p style={{ fontSize: 12, color: '#374151', lineHeight: 1.5, margin: 0 }}>{text}</p>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  )
+}
