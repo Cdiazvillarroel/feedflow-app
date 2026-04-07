@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react'
 import { getAnimalGroups, getFeedPrices, updateAnimalCount } from '@/lib/queries'
 import type { AnimalGroup, FeedPrice } from '@/lib/types'
-import AIInsightCard from '@/components/AIInsightCard'
 
 const RATIONS: Record<string, { material: string; kgPerHead: number; color: string }[]> = {
   'Sows lactating':  [{ material: 'Lactation diet', kgPerHead: 6.5, color: '#4CAF7D' }],
@@ -21,9 +20,12 @@ const PHASES: Record<string, string[]> = {
   'Sows lactating':  ['Lactation', 'Dry', 'Pre-weaning'],
   'Sows gestating':  ['Early gestation', 'Mid gestation', 'Late gestation'],
   'Gilt developers': ['Selection', 'Development', 'Pre-service'],
-  'Lactating sows':  ['Lactation', 'Dry'], 'Gestating sows': ['Early', 'Mid', 'Late'],
-  'Grower pigs':     ['Starter', 'Grower', 'Finisher'], 'Sow herd': ['Gestation', 'Lactation', 'Dry'],
-  'Weaners':         ['Early wean', 'Late wean'], 'Broilers': ['Day 1–7', 'Day 8–21', 'Day 22–35'],
+  'Lactating sows':  ['Lactation', 'Dry'],
+  'Gestating sows':  ['Early', 'Mid', 'Late'],
+  'Grower pigs':     ['Starter', 'Grower', 'Finisher'],
+  'Sow herd':        ['Gestation', 'Lactation', 'Dry'],
+  'Weaners':         ['Early wean', 'Late wean'],
+  'Broilers':        ['Day 1–7', 'Day 8–21', 'Day 22–35'],
   'Beef cattle':     ['Backgrounding', 'Finishing'],
 }
 
@@ -51,6 +53,7 @@ export default function AnimalsPage() {
   function dailyCost(g: AnimalGroup) { return getRations(g.name).reduce((s, r) => s + r.kgPerHead * g.count / 1000 * (priceMap[r.material] || 520), 0) }
   function costPerHead(g: AnimalGroup) { return g.count > 0 ? dailyCost(g) / g.count : 0 }
   function kgPerHeadTotal(g: AnimalGroup) { return getRations(g.name).reduce((s, r) => s + r.kgPerHead, 0) }
+
   async function handleCountChange(g: AnimalGroup, count: number) {
     await updateAnimalCount(g.id, count)
     setGroups(prev => prev.map(x => x.id === g.id ? { ...x, count } : x))
@@ -61,9 +64,9 @@ export default function AnimalsPage() {
   const totalCost    = groups.reduce((s, g) => s + dailyCost(g), 0)
 
   const typeBadge = (type: string) =>
-    type === 'pig' ? { bg: '#FAEEDA', color: '#633806', label: 'Pigs' } :
+    type === 'pig'     ? { bg: '#FAEEDA', color: '#633806', label: 'Pigs' } :
     type === 'poultry' ? { bg: '#eaf5ee', color: '#27500A', label: 'Poultry' } :
-    { bg: '#E6F1FB', color: '#0C447C', label: 'Cattle' }
+                         { bg: '#E6F1FB', color: '#0C447C', label: 'Cattle' }
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#8a9aaa', fontSize: 14 }}>
@@ -80,8 +83,6 @@ export default function AnimalsPage() {
         <div><div className="page-title">Animals</div><div className="page-sub">Herd groups · Feed rations · Cost per head</div></div>
         <div className="page-actions"><button className="btn-outline">Export</button><button className="btn-primary">+ Add group</button></div>
       </div>
-
-      <AIInsightCard page="animals" />
 
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Total animals</div><div className="sum-val">{totalAnimals.toLocaleString()}</div><div className="sum-sub">{groups.length} groups</div></div>
@@ -102,7 +103,7 @@ export default function AnimalsPage() {
             {groups.map(g => {
               const badge = typeBadge(g.type), cpp = costPerHead(g), on = g.id === selectedId
               return (
-                <button key={g.id} onClick={() => setSelectedId(g.id)} style={{ background: on ? '#f4fbf7' : '#fff', border: `${on ? '1.5px' : '0.5px'} solid ${on ? '#4CAF7D' : '#e8ede9'}`, borderRadius: 12, padding: '18px 18px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}>
+                <button key={g.id} onClick={() => setSelectedId(g.id)} style={{ background: on ? '#f4fbf7' : '#fff', border: `${on ? '1.5px' : '0.5px'} solid ${on ? '#4CAF7D' : '#e8ede9'}`, borderRadius: 12, padding: '18px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                     <span style={{ fontSize: 26 }}>{g.icon || '🐾'}</span>
                     <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 10, fontWeight: 700, background: badge.bg, color: badge.color }}>{badge.label}</span>
@@ -113,25 +114,17 @@ export default function AnimalsPage() {
                     <span style={{ fontSize: 12, color: '#aab8c0' }}>animals</span>
                   </div>
                   <div style={{ height: '0.5px', background: '#e8ede9', marginBottom: 10 }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid #f7f9f8' }}>
-                    <span style={{ fontSize: 11, color: '#8a9aaa' }}>kg/head/day</span>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                      <span style={{ fontSize: 15, fontWeight: 700, color: '#1a2530' }}>{kgPerHeadTotal(g).toFixed(1)}</span>
-                      <span style={{ fontSize: 10, color: '#aab8c0' }}>kg</span>
+                  {[
+                    { k: 'kg/head/day', v: `${kgPerHeadTotal(g).toFixed(1)} kg` },
+                    { k: 'Feed/day total', v: `${Math.round(dailyFeed(g)).toLocaleString()} kg` },
+                    { k: 'Cost/day', v: `$${Math.round(dailyCost(g)).toLocaleString()}` },
+                    { k: '$/head/day', v: `$${cpp.toFixed(2)}`, green: true },
+                  ].map(r => (
+                    <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid #f7f9f8' }}>
+                      <span style={{ fontSize: 11, color: '#8a9aaa' }}>{r.k}</span>
+                      <span style={{ fontSize: 12, fontWeight: (r as any).green ? 700 : 600, color: (r as any).green ? '#27500A' : '#1a2530' }}>{r.v}</span>
                     </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid #f7f9f8' }}>
-                    <span style={{ fontSize: 11, color: '#8a9aaa' }}>Feed/day total</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#1a2530' }}>{Math.round(dailyFeed(g)).toLocaleString()} kg</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '0.5px solid #f7f9f8' }}>
-                    <span style={{ fontSize: 11, color: '#8a9aaa' }}>Cost/day</span>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#1a2530' }}>${Math.round(dailyCost(g)).toLocaleString()}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-                    <span style={{ fontSize: 11, color: '#8a9aaa' }}>$/head/day</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#27500A' }}>${cpp.toFixed(2)}</span>
-                  </div>
+                  ))}
                 </button>
               )
             })}
@@ -147,7 +140,8 @@ export default function AnimalsPage() {
                       const phaseActive = (activePhase[selected.id] ?? 0) === i
                       return (
                         <button key={p} onClick={() => setActivePhase(prev => ({ ...prev, [selected.id]: i }))}
-                          style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, cursor: 'pointer', border: '0.5px solid', background: phaseActive ? '#1a2530' : '#fff', color: phaseActive ? '#fff' : '#6a7a8a', borderColor: phaseActive ? '#1a2530' : '#e8ede9', fontFamily: 'inherit' }}>{p}</button>
+                          style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, cursor: 'pointer', border: '0.5px solid', background: phaseActive ? '#1a2530' : '#fff', color: phaseActive ? '#fff' : '#6a7a8a', borderColor: phaseActive ? '#1a2530' : '#e8ede9', fontFamily: 'inherit' }}>{p}
+                        </button>
                       )
                     })}
                   </div>
@@ -159,9 +153,9 @@ export default function AnimalsPage() {
                   <tbody>
                     {getRations(selected.name).map(r => {
                       const totalKgHead = getRations(selected.name).reduce((s, x) => s + x.kgPerHead, 0)
-                      const pct = totalKgHead > 0 ? Math.round(r.kgPerHead/totalKgHead*100) : 100
+                      const pct     = totalKgHead > 0 ? Math.round(r.kgPerHead/totalKgHead*100) : 100
                       const totalKg = r.kgPerHead * selected.count
-                      const cost = totalKg / 1000 * (priceMap[r.material] || 520)
+                      const cost    = totalKg / 1000 * (priceMap[r.material] || 520)
                       return (
                         <tr key={r.material}>
                           <td style={{ padding: '12px', borderBottom: '0.5px solid #f0f4f0' }}>
@@ -211,10 +205,10 @@ export default function AnimalsPage() {
                 <div style={{ height: '0.5px', background: '#e8ede9', marginBottom: 14 }} />
                 {[
                   { k: 'Feed / day',   v: `${Math.round(dailyFeed(selected)).toLocaleString()} kg` },
-                  { k: 'Cost / day',   v: `$${Math.round(dailyCost(selected)).toLocaleString()}`, g: true },
-                  { k: 'Cost / week',  v: `$${Math.round(dailyCost(selected)*7).toLocaleString()}`, g: true },
+                  { k: 'Cost / day',   v: `$${Math.round(dailyCost(selected)).toLocaleString()}`,    g: true },
+                  { k: 'Cost / week',  v: `$${Math.round(dailyCost(selected)*7).toLocaleString()}`,  g: true },
                   { k: 'Cost / month', v: `$${Math.round(dailyCost(selected)*30).toLocaleString()}`, g: true },
-                  { k: 'Cost / year',  v: `$${Math.round(dailyCost(selected)*365).toLocaleString()}`, g: true },
+                  { k: 'Cost / year',  v: `$${Math.round(dailyCost(selected)*365).toLocaleString()}`,g: true },
                 ].map(r => (
                   <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f0f4f0' }}>
                     <span style={{ fontSize: 12, color: '#8a9aaa' }}>{r.k}</span>
