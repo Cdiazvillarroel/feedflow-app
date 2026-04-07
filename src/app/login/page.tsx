@@ -1,65 +1,78 @@
-import Link from 'next/link'
+'use client'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export default function LoginPage() {
+  const [email,    setEmail]    = useState('')
+  const [password, setPassword] = useState('')
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState('')
+  const router   = useRouter()
+  const supabase = createClientComponentClient()
+
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) { setError(error.message); setLoading(false); return }
+    router.push('/dashboard')
+    router.refresh()
+  }
+
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <div style={{ width: '42%', background: '#1a2530', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '48px 44px', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', right: -80, top: -80, width: 320, height: 320, borderRadius: '50%', border: '0.5px solid rgba(76,175,125,0.1)', pointerEvents: 'none' }} />
-        <div style={{ position: 'absolute', right: 30, top: 30, width: 180, height: 180, borderRadius: '50%', border: '0.5px solid rgba(74,144,196,0.08)', pointerEvents: 'none' }} />
-        <div style={{ position: 'relative', zIndex: 2 }}>
-          <div style={{ fontSize: 28, fontWeight: 500, color: '#fff', letterSpacing: -0.8, marginBottom: 14 }}>Feed<span style={{ color: '#4CAF7D' }}>Flow</span></div>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.42)', lineHeight: 1.65, maxWidth: 220 }}>Monitor. Optimize. Control.<br />Smart feed management for Australian farming.</p>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, position: 'relative', zIndex: 2 }}>
-          {[
-            { title: 'Real-time silo levels', sub: '15 sensors · reading every 2 hours' },
-            { title: 'AI consumption forecast', sub: 'Days remaining · automated alerts' },
-            { title: 'Cost per animal', sub: 'Live feed cost tracking per head' },
-            { title: 'Instant Telegram alerts', sub: 'Smart notifications 24/7' },
-          ].map(f => (
-            <div key={f.title} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4CAF7D', marginTop: 5, flexShrink: 0 }} />
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.88)', marginBottom: 2 }}>{f.title}</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', lineHeight: 1.4 }}>{f.sub}</div>
-              </div>
+    <div style={{ minHeight: '100vh', background: '#f7f9f8', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
+
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div style={{ width: 40, height: 40, background: '#4CAF7D', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
             </div>
-          ))}
+            <span style={{ fontSize: 24, fontWeight: 700, color: '#1a2530', letterSpacing: -0.5 }}>FeedFlow</span>
+          </div>
+          <p style={{ fontSize: 13, color: '#8a9aaa', margin: 0 }}>Smart feed management</p>
         </div>
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', position: 'relative', zIndex: 2 }}>© 2025 FeedFlow · feedflow.cloud · Bendigo VIC</div>
-      </div>
 
-      <div style={{ flex: 1, background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 44px' }}>
-        <div style={{ width: '100%', maxWidth: 340 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 500, color: '#1a2530', marginBottom: 6 }}>Welcome back</h2>
-          <p style={{ fontSize: 13, color: '#8a9aaa', marginBottom: 30 }}>Sign in to your FeedFlow account</p>
+        <div style={{ background: '#fff', borderRadius: 14, border: '0.5px solid #e8ede9', padding: '32px 28px' }}>
+          <h1 style={{ fontSize: 18, fontWeight: 600, color: '#1a2530', marginBottom: 6 }}>Sign in</h1>
+          <p style={{ fontSize: 13, color: '#8a9aaa', marginBottom: 24 }}>Enter your credentials to access your farms</p>
 
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6 }}>Email address</label>
-            <input type="email" placeholder="you@farm.com.au" style={{ height: 42, borderRadius: 8, border: '0.5px solid #dde8e0', background: '#f7f9f8', padding: '0 13px', fontSize: 14, color: '#1a2530', width: '100%' }} />
-          </div>
-          <div style={{ marginBottom: 8 }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6 }}>Password</label>
-            <input type="password" placeholder="••••••••" style={{ height: 42, borderRadius: 8, border: '0.5px solid #dde8e0', background: '#f7f9f8', padding: '0 13px', fontSize: 14, color: '#1a2530', width: '100%' }} />
-          </div>
-          <div style={{ textAlign: 'right', marginBottom: 22 }}>
-            <a href="#" style={{ fontSize: 12, color: '#4A90C4' }}>Forgot password?</a>
-          </div>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#1a2530', marginBottom: 6 }}>Email</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                placeholder="admin@feedflow.com" required
+                style={{ width: '100%', padding: '10px 12px', border: '0.5px solid #c8d8cc', borderRadius: 8, fontSize: 14, color: '#1a2530', background: '#fff', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none' }} />
+            </div>
 
-          <Link href="/dashboard" style={{ display: 'block', width: '100%', height: 44, borderRadius: 8, background: '#2D3E50', color: '#fff', fontSize: 14, fontWeight: 500, textAlign: 'center', lineHeight: '44px', textDecoration: 'none', marginBottom: 16 }}>Sign in</Link>
+            <div>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#1a2530', marginBottom: 6 }}>Password</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••" required
+                style={{ width: '100%', padding: '10px 12px', border: '0.5px solid #c8d8cc', borderRadius: 8, fontSize: 14, color: '#1a2530', background: '#fff', fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none' }} />
+            </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '22px 0' }}>
-            <hr style={{ flex: 1, border: 'none', borderTop: '0.5px solid #e8ede9' }} />
-            <span style={{ fontSize: 12, color: '#aab8c0' }}>or</span>
-            <hr style={{ flex: 1, border: 'none', borderTop: '0.5px solid #e8ede9' }} />
-          </div>
+            {error && (
+              <div style={{ background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#A32D2D' }}>
+                {error}
+              </div>
+            )}
 
-          <Link href="/home#contact" style={{ display: 'block', width: '100%', height: 42, borderRadius: 8, background: 'transparent', border: '0.5px solid #dde8e0', color: '#6a7a8a', fontSize: 13, textAlign: 'center', lineHeight: '42px', textDecoration: 'none' }}>Request a demo</Link>
-
-          <p style={{ marginTop: 24, textAlign: 'center', fontSize: 12, color: '#aab8c0' }}>
-            No account? <Link href="/home#contact" style={{ color: '#4A90C4' }}>Contact FeedFlow</Link>
-          </p>
+            <button type="submit" disabled={loading}
+              style={{ width: '100%', padding: '11px', background: loading ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, color: '#fff', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s' }}>
+              {loading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </form>
         </div>
+
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#aab8c0', marginTop: 20 }}>
+          FeedFlow · Smart Feed Management Platform
+        </p>
       </div>
     </div>
   )
