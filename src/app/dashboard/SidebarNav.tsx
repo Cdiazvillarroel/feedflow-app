@@ -1,6 +1,8 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState } from 'react'
+import { useFarm } from './FarmContext'
 
 const navItems = [
   { section: 'Monitor' },
@@ -28,57 +30,73 @@ const icons: Record<string, string> = {
   wifi:     'M12 20h.01M2 8.82a15 15 0 0 1 20 0M6 12.7a9 9 0 0 1 12 0M9.5 16.5a5 5 0 0 1 5 0',
 }
 
-export default function Sidebar() {
+export default function SidebarNav() {
   const path = usePathname()
+  const { farms, currentFarm, setCurrentFarm, loading } = useFarm()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
 
   return (
-    <div className="sidebar">
-      {navItems.map((item, i) => {
-        if ('section' in item) {
-          return <div key={i} className="nav-section">{item.section}</div>
-        }
+    <aside style={{
+      width: 220, minWidth: 220,
+      background: '#ffffff',
+      borderRight: '1px solid #e5e7eb',
+      display: 'flex', flexDirection: 'column',
+      padding: '16px 0 12px',
+      overflowY: 'auto', flexShrink: 0,
+      minHeight: 'calc(100vh - 56px)',
+    }}>
 
-        const active = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
-        const isAI   = item.icon === 'ai'
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`nav-item${active ? ' active' : ''}`}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 20px', fontSize: 13, textDecoration: 'none',
-              color:      active ? '#27500A' : '#6a7a8a',
-              background: active ? '#eaf5ee' : 'transparent',
-              borderRight: active ? '2px solid #4CAF7D' : 'none',
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-              stroke={isAI && !active ? '#4CAF7D' : 'currentColor'}
-              strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d={icons[item.icon]} />
-            </svg>
-
-            <span style={{ flex: 1 }}>{item.label}</span>
-
-            {/* AI badge — small green dot when not active */}
-            {isAI && !active && (
-              <span style={{
-                fontSize: 9, fontWeight: 700, padding: '1px 6px',
-                borderRadius: 10, background: 'rgba(76,175,125,0.12)',
-                color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.3)',
+      {/* NAV LINKS */}
+      <div style={{ flex: 1 }}>
+        {navItems.map((item, i) => {
+          if ('section' in item) {
+            return (
+              <p key={i} style={{
+                fontSize: 10, fontWeight: 700, color: '#9ca3af',
+                textTransform: 'uppercase', letterSpacing: '0.07em',
+                padding: '8px 18px 4px', margin: 0,
               }}>
-                AI
-              </span>
-            )}
+                {item.section}
+              </p>
+            )
+          }
 
-            {item.badge && !isAI && (
-              <span className="nav-badge">{item.badge}</span>
-            )}
-          </Link>
-        )
-      })}
-    </div>
-  )
-}
+          const active = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
+          const isAI   = item.icon === 'ai'
+
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 18px', margin: '1px 8px', borderRadius: 6,
+                fontSize: 13, fontWeight: active ? 600 : 400,
+                color:      active ? '#166534' : '#374151',
+                background: active ? '#dcfce7' : 'transparent',
+                textDecoration: 'none', transition: 'background 0.1s',
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                stroke={isAI && !active ? '#4CAF7D' : 'currentColor'}
+                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+                style={{ flexShrink: 0, opacity: active ? 1 : 0.6 }}>
+                <path d={icons[item.icon]} />
+              </svg>
+
+              <span style={{ flex: 1 }}>{item.label}</span>
+
+              {isAI && !active && (
+                <span style={{
+                  fontSize: 9, fontWeight: 700, padding: '1px 6px',
+                  borderRadius: 10, background: 'rgba(76,175,125,0.12)',
+                  color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.3)',
+                }}>
+                  AI
+                </span>
+              )}
+
+              {item.badge && !isAI && (
+                <span style={{
+                  background: '#ef4444', color: '#fff',
+                  font
