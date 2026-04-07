@@ -4,7 +4,6 @@ import { getFeedPrices, getAnimalGroups, updateFeedPrice, updateAnimalCount, get
 import type { FeedPrice, AnimalGroup } from '@/lib/types'
 import { Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
-import AIInsightCard from '@/components/AIInsightCard'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
@@ -99,8 +98,6 @@ export default function CostsPage() {
           {savedMsg && <span style={{ fontSize: 11, color: '#27500A', fontWeight: 600 }}>✓ {savedMsg}</span>}
         </div>
       </div>
-
-      <AIInsightCard page="costs" />
 
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Monthly spend</div><div className="sum-val">${Math.round(totalDaily*30).toLocaleString()}</div><div className="sum-sub">At current rate</div></div>
@@ -215,9 +212,9 @@ export default function CostsPage() {
         <div className="card-header"><div className="card-title">Cost projections</div></div>
         <div className="grid-3" style={{ marginBottom: 0 }}>
           {[
-            { label: 'This month', val: Math.round(totalDaily*30), sub: 'At current rate' },
-            { label: 'Next month est.', val: Math.round(totalDaily*30*1.05), sub: '+5% seasonal adjustment' },
-            { label: 'Annual projection', val: Math.round(totalDaily*365), sub: 'At flat current rate' },
+            { label: 'This month',       val: Math.round(totalDaily*30),    sub: 'At current rate' },
+            { label: 'Next month est.',  val: Math.round(totalDaily*30*1.05), sub: '+5% seasonal adjustment' },
+            { label: 'Annual projection',val: Math.round(totalDaily*365),   sub: 'At flat current rate' },
           ].map(p => (
             <div key={p.label} style={{ background: '#f7f9f8', borderRadius: 10, padding: '16px 18px' }}>
               <div style={{ fontSize: 11, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>{p.label}</div>
