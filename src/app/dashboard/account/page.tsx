@@ -670,18 +670,14 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
         body: JSON.stringify({ user_id: drawer.id, password: editPass }),
       })
     }
-    for (const f of editFarms.filter((f: any) => !f.assigned)) {
-      await supabase.from('user_farms').delete().eq('user_id', drawer.id).eq('farm_id', f.farm_id)
-    }
-    for (const f of editFarms.filter((f: any) => f.assigned)) {
-      await supabase.from('user_farms').upsert(
-        { user_id: drawer.id, farm_id: f.farm_id, role: f.role },
-        { onConflict: 'user_id,farm_id' }
-      )
-    }
+    await fetch('/api/admin/update-farms', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: drawer.id, farms: editFarms }),
+    })
     setSavingEdit(false)
     setDrawer(null)
     onMsg('User updated')
+    await new Promise(r => setTimeout(r, 400))
     loadUsers()
   }
   
