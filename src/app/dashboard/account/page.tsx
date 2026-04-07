@@ -525,33 +525,15 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
   useEffect(() => { loadUsers() }, [])
 
   async function loadUsers() {
-    setLoading(true)
-    const [ufRes, authRes] = await Promise.all([
-      supabase.from('user_farms').select('user_id, farm_id, role, farms(id, name)'),
-      fetch(`/api/admin/list-users?t=${Date.now()}`, { cache: 'no-store' }),
-    ])
-    const uf        = ufRes.data || []
-    const authData  = await authRes.json()
-    const authUsers = authData.users || []
-
-    const rows: UserRow[] = authUsers.map((u: any) => ({
-      id:         u.id,
-      email:      u.email,
-      created_at: u.created_at,
-      user_farms: uf
-        .filter((r: any) => r.user_id === u.id)
-        .map((r: any) => ({
-          farm_id:   r.farm_id,
-          role:      r.role,
-          farm_name: Array.isArray(r.farms) ? r.farms[0]?.name || '—' : r.farms?.name || '—',
-        })),
-    }))
-
-    setUsers([])
-    await new Promise(r => setTimeout(r, 50))
-    setUsers(rows)
-    setLoading(false)
-  }
+  setLoading(true)
+  const res      = await fetch(`/api/admin/list-users?t=${Date.now()}`, { cache: 'no-store' })
+  const authData = await res.json()
+  const rows     = authData.users || []
+  setUsers([])
+  await new Promise(r => setTimeout(r, 50))
+  setUsers(rows)
+  setLoading(false)
+}
 
   function openDrawer(u: UserRow) {
     setDrawer(u)
