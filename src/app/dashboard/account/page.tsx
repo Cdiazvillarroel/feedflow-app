@@ -4,23 +4,23 @@ import { supabase } from '@/lib/supabase'
 import { getActiveFarmId } from '@/lib/queries'
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
-interface Farm   { id: string; name: string; location: string | null; lat: number | null; lng: number | null; timezone: string }
-interface Silo   { id: string; farm_id: string; name: string; material: string | null; capacity_kg: number; digitplan_silo_id: number | null; active: boolean }
-interface Sensor { id: string; silo_id: string; serial: string; model: string; status: string; battery_pct: number; signal_strength: number }
+interface Farm        { id: string; name: string; location: string | null; lat: number | null; lng: number | null; timezone: string }
+interface Silo        { id: string; farm_id: string; name: string; material: string | null; capacity_kg: number; digitplan_silo_id: number | null; active: boolean }
+interface Sensor      { id: string; silo_id: string; serial: string; model: string; status: string; battery_pct: number; signal_strength: number }
 interface AnimalGroup { id: string; farm_id: string; name: string; type: string; icon: string | null; count: number }
 
-type Tab = 'farms' | 'silos' | 'sensors' | 'animals'
+type Tab = 'farms' | 'silos' | 'sensors' | 'animals' | 'users'
 
-// ── HELPERS ───────────────────────────────────────────────────────────────────
 const ANIMAL_TYPES = ['pig', 'poultry', 'cattle', 'sheep', 'other']
 const MATERIALS    = ['Lactation diet', 'Gestation diet', 'Maize meal', 'Wheat bran', 'Soybean meal', 'Barley', 'Other']
 const TIMEZONES    = ['Australia/Melbourne', 'Australia/Sydney', 'Australia/Brisbane', 'Australia/Perth']
+const ROLES        = ['owner', 'manager', 'viewer']
 
 function inputStyle(full = false): React.CSSProperties {
   return { width: full ? '100%' : 'auto', padding: '8px 10px', border: '0.5px solid #c8d8cc', borderRadius: 7, fontSize: 13, color: '#1a2530', background: '#fff', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
 }
 function labelStyle(): React.CSSProperties {
-  return { display: 'block', fontSize: 11, fontWeight: 600, color: '#6a7a8a', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 5 }
+  return { display: 'block', fontSize: 11, fontWeight: 600, color: '#6a7a8a', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 5 } as React.CSSProperties
 }
 
 // ── MAIN PAGE ─────────────────────────────────────────────────────────────────
@@ -62,6 +62,7 @@ export default function AccountPage() {
     { key: 'silos',   label: 'Silos',   count: silos.length },
     { key: 'sensors', label: 'Sensors', count: sensors.length },
     { key: 'animals', label: 'Animals', count: animals.length },
+    { key: 'users',   label: 'Users',   count: 0 },
   ]
 
   if (loading) return (
@@ -75,11 +76,10 @@ export default function AccountPage() {
 
   return (
     <>
-      {/* HEADER */}
       <div className="page-header">
         <div>
           <div className="page-title">Account</div>
-          <div className="page-sub">Manage farms, silos, sensors and animal groups</div>
+          <div className="page-sub">Manage farms, silos, sensors, animals and users</div>
         </div>
         {msg && (
           <div style={{ padding: '7px 14px', background: '#eaf5ee', border: '0.5px solid #4CAF7D', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#27500A' }}>
@@ -88,24 +88,25 @@ export default function AccountPage() {
         )}
       </div>
 
-      {/* TABS */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '0.5px solid #e8ede9', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '0.5px solid #e8ede9' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{ padding: '9px 18px', fontSize: 13, fontWeight: tab === t.key ? 600 : 400, cursor: 'pointer', border: 'none', background: 'transparent', fontFamily: 'inherit', color: tab === t.key ? '#1a2530' : '#8a9aaa', borderBottom: tab === t.key ? '2px solid #4CAF7D' : '2px solid transparent', marginBottom: -1 }}>
             {t.label}
-            <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 10, background: tab === t.key ? '#eaf5ee' : '#f0f4f0', color: tab === t.key ? '#27500A' : '#aab8c0', fontWeight: 600 }}>
-              {t.count}
-            </span>
+            {t.count > 0 && (
+              <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 10, background: tab === t.key ? '#eaf5ee' : '#f0f4f0', color: tab === t.key ? '#27500A' : '#aab8c0', fontWeight: 600 }}>
+                {t.count}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
-      {/* CONTENT */}
       {tab === 'farms'   && <FarmsTab   farms={farms}   onRefresh={loadAll} onMsg={showMsg} activeFarmId={activeFarmId} />}
       {tab === 'silos'   && <SilosTab   silos={silos}   farms={farms} onRefresh={loadAll} onMsg={showMsg} activeFarmId={activeFarmId} />}
       {tab === 'sensors' && <SensorsTab sensors={sensors} silos={silos} farms={farms} onRefresh={loadAll} onMsg={showMsg} />}
       {tab === 'animals' && <AnimalsTab animals={animals} farms={farms} onRefresh={loadAll} onMsg={showMsg} activeFarmId={activeFarmId} />}
+      {tab === 'users'   && <UsersTab   farms={farms} onMsg={showMsg} />}
     </>
   )
 }
@@ -148,11 +149,10 @@ function FarmsTab({ farms, onRefresh, onMsg, activeFarmId }: { farms: Farm[]; on
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
-      {/* LIST */}
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">Your farms</div></div>
         {farms.length === 0 ? (
-          <div style={{ color: '#8a9aaa', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>No farms yet. Create your first farm →</div>
+          <div style={{ color: '#8a9aaa', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>No farms yet.</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {farms.map(f => (
@@ -171,7 +171,6 @@ function FarmsTab({ farms, onRefresh, onMsg, activeFarmId }: { farms: Farm[]; on
         )}
       </div>
 
-      {/* FORM */}
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header"><div className="card-title">{editing ? 'Edit farm' : 'New farm'}</div></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -199,7 +198,7 @@ function FarmsTab({ farms, onRefresh, onMsg, activeFarmId }: { farms: Farm[]; on
               {TIMEZONES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={save} disabled={saving || !form.name.trim()}
               style={{ flex: 1, padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
               {saving ? 'Saving...' : editing ? 'Update farm' : 'Create farm'}
@@ -343,30 +342,28 @@ function SilosTab({ silos, farms, onRefresh, onMsg, activeFarmId }: { silos: Sil
 // ── SENSORS TAB ───────────────────────────────────────────────────────────────
 function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sensor[]; silos: Silo[]; farms: Farm[]; onRefresh: () => void; onMsg: (m: string) => void }) {
   const empty = { silo_id: '', serial: '', model: 'SiloMetric Laser', firmware: '' }
-  const [form,    setForm]    = useState(empty)
-  const [editing, setEditing] = useState<string | null>(null)
-  const [saving,  setSaving]  = useState(false)
+  const [form,       setForm]       = useState(empty)
+  const [editing,    setEditing]    = useState<string | null>(null)
+  const [saving,     setSaving]     = useState(false)
   const [farmFilter, setFarmFilter] = useState('')
 
   const filteredSilos   = farmFilter ? silos.filter(s => s.farm_id === farmFilter) : silos
   const filteredSensors = farmFilter ? sensors.filter(sen => silos.find(s => s.id === sen.silo_id && s.farm_id === farmFilter)) : sensors
-
-  const siloName = (id: string) => silos.find(s => s.id === id)?.name || '—'
-  const farmOfSilo = (siloId: string) => { const silo = silos.find(s => s.id === siloId); return silo ? farms.find(f => f.id === silo.farm_id)?.name || '—' : '—' }
+  const siloName    = (id: string) => silos.find(s => s.id === id)?.name || '—'
+  const farmOfSilo  = (siloId: string) => { const silo = silos.find(s => s.id === siloId); return silo ? farms.find(f => f.id === silo.farm_id)?.name || '—' : '—' }
   const statusColor = (s: string) => s === 'online' ? '#27500A' : s === 'delayed' ? '#633806' : '#A32D2D'
   const statusBg    = (s: string) => s === 'online' ? '#eaf5ee' : s === 'delayed' ? '#FAEEDA' : '#FCEBEB'
 
   async function save() {
     if (!form.silo_id || !form.serial.trim()) return
     setSaving(true)
-    const payload = { silo_id: form.silo_id, serial: form.serial.trim().toUpperCase(), model: form.model, firmware: form.firmware || null, status: 'online', battery_pct: 100, signal_strength: 3, installed_at: new Date().toISOString(), last_seen_at: new Date().toISOString() }
     if (editing) {
       await supabase.from('sensors').update({ silo_id: form.silo_id, serial: form.serial.trim().toUpperCase(), model: form.model, firmware: form.firmware || null }).eq('id', editing)
       onMsg('Sensor updated')
     } else {
       const existing = sensors.find(s => s.silo_id === form.silo_id)
       if (existing) { onMsg('This silo already has a sensor — edit it instead'); setSaving(false); return }
-      await supabase.from('sensors').insert(payload)
+      await supabase.from('sensors').insert({ silo_id: form.silo_id, serial: form.serial.trim().toUpperCase(), model: form.model, firmware: form.firmware || null, status: 'online', battery_pct: 100, signal_strength: 3, installed_at: new Date().toISOString(), last_seen_at: new Date().toISOString() })
       onMsg('Sensor enrolled')
     }
     setForm(empty); setEditing(null); setSaving(false); onRefresh()
@@ -410,9 +407,7 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa' }}>{farmOfSilo(s.silo_id)}</td>
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa' }}>{s.model}</td>
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
-                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: statusBg(s.status), color: statusColor(s.status), fontWeight: 600 }}>
-                      {s.status}
-                    </span>
+                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: statusBg(s.status), color: statusColor(s.status), fontWeight: 600 }}>{s.status}</span>
                   </td>
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -425,7 +420,7 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button onClick={() => edit(s)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#6a7a8a' }}>Edit</button>
-                      <button onClick={() => remove(s.id)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>Remove</button>
+                      <button onClick={() => remove(s.id)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -488,6 +483,7 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
 
 // ── ANIMALS TAB ───────────────────────────────────────────────────────────────
 function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId }: { animals: AnimalGroup[]; farms: Farm[]; onRefresh: () => void; onMsg: (m: string) => void; activeFarmId: string }) {
+  const TYPE_ICONS: Record<string, string> = { pig: '🐖', poultry: '🐔', cattle: '🐄', sheep: '🐑', other: '🐾' }
   const empty = { farm_id: activeFarmId, name: '', type: 'pig', icon: '🐖', count: '0' }
   const [form,    setForm]    = useState(empty)
   const [editing, setEditing] = useState<string | null>(null)
@@ -496,8 +492,6 @@ function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId }: { animal
 
   const filtered = animals.filter(a => !filter || a.farm_id === filter)
   const farmName = (id: string) => farms.find(f => f.id === id)?.name || '—'
-
-  const TYPE_ICONS: Record<string, string> = { pig: '🐖', poultry: '🐔', cattle: '🐄', sheep: '🐑', other: '🐾' }
 
   async function save() {
     if (!form.name.trim() || !form.farm_id) return
@@ -610,6 +604,213 @@ function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId }: { animal
               </button>
             )}
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── USERS TAB ─────────────────────────────────────────────────────────────────
+function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void }) {
+  interface UserRow {
+    id:         string
+    email:      string
+    created_at: string
+    farms:      { farm_id: string; role: string; farm_name: string }[]
+  }
+
+  const empty = { email: '', password: '', role: 'viewer', farm_ids: [] as string[] }
+  const [users,   setUsers]   = useState<UserRow[]>([])
+  const [form,    setForm]    = useState(empty)
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+  const [error,   setError]   = useState('')
+
+  useEffect(() => { loadUsers() }, [])
+
+  async function loadUsers() {
+    setLoading(true)
+    const [ufRes, authRes] = await Promise.all([
+      supabase.from('user_farms').select('user_id, farm_id, role, farms(name)'),
+      fetch('/api/admin/list-users'),
+    ])
+    const uf        = ufRes.data || []
+    const authData  = await authRes.json()
+    const authUsers = authData.users || []
+
+    const rows: UserRow[] = authUsers.map((u: any) => ({
+      id:         u.id,
+      email:      u.email,
+      created_at: u.created_at,
+      farms: uf
+        .filter((r: any) => r.user_id === u.id)
+        .map((r: any) => ({ farm_id: r.farm_id, role: r.role, farm_name: (r.farms as any)?.name || '—' })),
+    }))
+
+    setUsers(rows)
+    setLoading(false)
+  }
+
+  function toggleFarm(farmId: string) {
+    setForm(p => ({
+      ...p,
+      farm_ids: p.farm_ids.includes(farmId)
+        ? p.farm_ids.filter(id => id !== farmId)
+        : [...p.farm_ids, farmId],
+    }))
+  }
+
+  async function createUser() {
+    if (!form.email || !form.password || form.farm_ids.length === 0) {
+      setError('Email, password and at least one farm are required')
+      return
+    }
+    setSaving(true)
+    setError('')
+    const res  = await fetch('/api/admin/create-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: form.email, password: form.password, role: form.role, farm_ids: form.farm_ids }),
+    })
+    const data = await res.json()
+    if (data.error) { setError(data.error); setSaving(false); return }
+    onMsg('User created')
+    setForm(empty)
+    setSaving(false)
+    loadUsers()
+  }
+
+  async function removeUser(userId: string, email: string) {
+    if (!confirm(`Remove user ${email}?`)) return
+    const res  = await fetch('/api/admin/delete-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    })
+    const data = await res.json()
+    if (data.error) { onMsg('Error: ' + data.error); return }
+    onMsg('User removed')
+    loadUsers()
+  }
+
+  async function updateRole(userId: string, farmId: string, role: string) {
+    await supabase.from('user_farms').update({ role }).eq('user_id', userId).eq('farm_id', farmId)
+    onMsg('Role updated')
+    loadUsers()
+  }
+
+  async function removeFarmAccess(userId: string, farmId: string) {
+    await supabase.from('user_farms').delete().eq('user_id', userId).eq('farm_id', farmId)
+    onMsg('Farm access removed')
+    loadUsers()
+  }
+
+  const roleBadge = (r: string) =>
+    r === 'owner'   ? { bg: '#eaf5ee', color: '#27500A' } :
+    r === 'manager' ? { bg: '#E6F1FB', color: '#0C447C' } :
+                      { bg: '#f0f4f0', color: '#6a7a8a'  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+      <div className="card" style={{ marginBottom: 0 }}>
+        <div className="card-header">
+          <div className="card-title">Users with access</div>
+          <span style={{ fontSize: 12, color: '#aab8c0' }}>{users.length} users</span>
+        </div>
+        {loading ? (
+          <div style={{ padding: '20px 0', textAlign: 'center', color: '#aab8c0', fontSize: 13 }}>Loading users...</div>
+        ) : users.length === 0 ? (
+          <div style={{ padding: '20px 0', textAlign: 'center', color: '#aab8c0', fontSize: 13 }}>No users yet.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+            {users.map(u => (
+              <div key={u.id} style={{ padding: '14px 0', borderBottom: '0.5px solid #f0f4f0' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a2530', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#fff', flexShrink: 0 }}>
+                    {u.email.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{u.email}</div>
+                    <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>
+                      Joined {new Date(u.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </div>
+                  </div>
+                  <button onClick={() => removeUser(u.id, u.email)}
+                    style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>
+                    Remove
+                  </button>
+                </div>
+                {u.farms.length === 0 ? (
+                  <div style={{ fontSize: 12, color: '#aab8c0', paddingLeft: 42 }}>No farms assigned</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 42 }}>
+                    {u.farms.map(f => {
+                      const badge = roleBadge(f.role)
+                      return (
+                        <div key={f.farm_id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4CAF7D', flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: '#1a2530', flex: 1 }}>{f.farm_name}</span>
+                          <select value={f.role} onChange={e => updateRole(u.id, f.farm_id, e.target.value)}
+                            style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: `0.5px solid ${badge.color}44`, background: badge.bg, color: badge.color, fontFamily: 'inherit', cursor: 'pointer' }}>
+                            {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+                          </select>
+                          <button onClick={() => removeFarmAccess(u.id, f.farm_id)}
+                            style={{ fontSize: 10, padding: '3px 7px', borderRadius: 5, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#aab8c0' }}>✕</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ marginBottom: 0 }}>
+        <div className="card-header"><div className="card-title">Create new user</div></div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <label style={labelStyle()}>Email *</label>
+            <input style={inputStyle(true)} type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="user@email.com" />
+          </div>
+          <div>
+            <label style={labelStyle()}>Password *</label>
+            <input style={inputStyle(true)} type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 6 characters" />
+          </div>
+          <div>
+            <label style={labelStyle()}>Default role</label>
+            <select style={{ ...inputStyle(true) }} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
+              {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
+            </select>
+            <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 6, lineHeight: 1.6 }}>
+              <strong style={{ color: '#1a2530' }}>Owner</strong> — full access &nbsp;·&nbsp;
+              <strong style={{ color: '#1a2530' }}>Manager</strong> — edit only &nbsp;·&nbsp;
+              <strong style={{ color: '#1a2530' }}>Viewer</strong> — read only
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle()}>Assign farms * (select at least one)</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+              {farms.map(f => {
+                const checked = form.farm_ids.includes(f.id)
+                return (
+                  <label key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '8px 10px', borderRadius: 7, border: `0.5px solid ${checked ? '#4CAF7D' : '#e8ede9'}`, background: checked ? '#f4fbf7' : '#fff' }}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleFarm(f.id)} style={{ accentColor: '#4CAF7D', width: 14, height: 14 }} />
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: checked ? 600 : 400, color: '#1a2530' }}>{f.name}</div>
+                      {f.location && <div style={{ fontSize: 11, color: '#aab8c0' }}>{f.location}</div>}
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+          {error && (
+            <div style={{ background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#A32D2D' }}>{error}</div>
+          )}
+          <button onClick={createUser} disabled={saving}
+            style={{ width: '100%', padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+            {saving ? 'Creating...' : 'Create user'}
+          </button>
         </div>
       </div>
     </div>
