@@ -3,22 +3,22 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useFarm } from './FarmContext'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { supabase } from '@/lib/supabase'
 
 const navItems = [
   { section: 'Monitor' },
-  { href: '/dashboard',             label: 'Dashboard',   icon: 'grid' },
-  { href: '/dashboard/alerts',      label: 'Alerts',      icon: 'bell',  badge: 5 },
-  { href: '/dashboard/analytics',   label: 'Analytics',   icon: 'activity' },
-  { href: '/dashboard/insights',    label: 'AI Insights', icon: 'ai' },
-  { href: '/dashboard/map',         label: 'Map view',    icon: 'map' },
+  { href: '/dashboard',           label: 'Dashboard',   icon: 'grid' },
+  { href: '/dashboard/alerts',    label: 'Alerts',      icon: 'bell',  badge: 5 },
+  { href: '/dashboard/analytics', label: 'Analytics',   icon: 'activity' },
+  { href: '/dashboard/insights',  label: 'AI Insights', icon: 'ai' },
+  { href: '/dashboard/map',       label: 'Map view',    icon: 'map' },
   { section: 'Manage' },
-  { href: '/dashboard/forecast',    label: 'Forecast',    icon: 'trending' },
-  { href: '/dashboard/costs',       label: 'Feed costs',  icon: 'dollar' },
-  { href: '/dashboard/animals',     label: 'Animals',     icon: 'users' },
-  { href: '/dashboard/sensors',     label: 'Sensors',     icon: 'wifi' },
+  { href: '/dashboard/forecast',  label: 'Forecast',    icon: 'trending' },
+  { href: '/dashboard/costs',     label: 'Feed costs',  icon: 'dollar' },
+  { href: '/dashboard/animals',   label: 'Animals',     icon: 'users' },
+  { href: '/dashboard/sensors',   label: 'Sensors',     icon: 'wifi' },
   { section: 'Settings' },
-  { href: '/dashboard/account',     label: 'Account',     icon: 'settings' },
+  { href: '/dashboard/account',   label: 'Account',     icon: 'settings' },
 ]
 
 const icons: Record<string, string> = {
@@ -35,9 +35,8 @@ const icons: Record<string, string> = {
 }
 
 export default function SidebarNav() {
-  const path     = usePathname()
-  const router   = useRouter()
-  const supabase = createClientComponentClient()
+  const path   = usePathname()
+  const router = useRouter()
   const { farms, currentFarm, setCurrentFarm, loading } = useFarm()
   const [dropdownOpen, setDropdownOpen] = useState(false)
 
@@ -50,20 +49,13 @@ export default function SidebarNav() {
   return (
     <aside style={{ width: 220, minWidth: 220, background: '#ffffff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', padding: '16px 0 0', overflowY: 'auto', flexShrink: 0, minHeight: 'calc(100vh - 56px)' }}>
 
-      {/* NAV LINKS */}
       <div style={{ flex: 1 }}>
         {navItems.map((item, i) => {
           if ('section' in item) {
-            return (
-              <p key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 18px 4px', margin: 0 }}>
-                {item.section}
-              </p>
-            )
+            return <p key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 18px 4px', margin: 0 }}>{item.section}</p>
           }
-
           const active = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
           const isAI   = item.icon === 'ai'
-
           return (
             <Link key={item.href} href={item.href}
               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 18px', margin: '1px 8px', borderRadius: 6, fontSize: 13, fontWeight: active ? 600 : 400, color: active ? '#166534' : '#374151', background: active ? '#dcfce7' : 'transparent', textDecoration: 'none' }}>
@@ -85,7 +77,6 @@ export default function SidebarNav() {
         })}
       </div>
 
-      {/* LOGOUT */}
       <div style={{ padding: '8px 10px', borderTop: '0.5px solid #e5e7eb' }}>
         <button onClick={handleLogout}
           style={{ width: '100%', padding: '8px 12px', background: 'transparent', border: '0.5px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#6a7a8a', fontFamily: 'inherit' }}>
@@ -96,10 +87,9 @@ export default function SidebarNav() {
         </button>
       </div>
 
-      {/* FARM SELECTOR */}
       <div style={{ margin: '8px 10px 12px', position: 'relative' }}>
         <button onClick={() => setDropdownOpen(prev => !prev)}
-          style={{ width: '100%', padding: '10px 12px', background: '#f9fafb', border: `1px solid ${dropdownOpen ? '#4CAF7D' : '#e5e7eb'}`, borderRadius: 8, cursor: 'pointer', textAlign: 'left', transition: 'border-color 0.15s' }}>
+          style={{ width: '100%', padding: '10px 12px', background: '#f9fafb', border: `1px solid ${dropdownOpen ? '#4CAF7D' : '#e5e7eb'}`, borderRadius: 8, cursor: 'pointer', textAlign: 'left' }}>
           <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current farm</p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
