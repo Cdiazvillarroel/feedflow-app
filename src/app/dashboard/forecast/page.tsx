@@ -4,7 +4,6 @@ import { getSilosWithReadings, getFeedPrices, getAnimalGroups } from '@/lib/quer
 import type { SiloWithReading, FeedPrice, AnimalGroup } from '@/lib/types'
 import { Line, Bar } from 'react-chartjs-2'
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip, Legend } from 'chart.js'
-import AIInsightCard from '@/components/AIInsightCard'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Filler, Tooltip, Legend)
 
@@ -26,14 +25,13 @@ export default function ForecastPage() {
       .then(([s, p, g]) => { setSilos(s); setPrices(p); setGroups(g); setLoading(false) })
   }, [])
 
-  const priceMap     = Object.fromEntries(prices.map(p => [p.material, p.price_per_tonne]))
-  const totalAnimals = groups.reduce((s, g) => s + g.count, 0)
-  const totalKgDay   = silos.reduce((s, x) => s + siloKgDay(x), 0)
-  const totalCostDay = silos.reduce((s, silo) => s + (siloKgDay(silo) / 1000 * (priceMap[silo.material || ''] || 520)), 0)
-  const totalCapKg   = silos.reduce((s, x) => s + x.capacity_kg, 0)
-  const projKg       = silos.reduce((s, x) => s + Math.max(0, x.kg_remaining - siloKgDay(x) * horizon), 0)
+  const priceMap      = Object.fromEntries(prices.map(p => [p.material, p.price_per_tonne]))
+  const totalAnimals  = groups.reduce((s, g) => s + g.count, 0)
+  const totalKgDay    = silos.reduce((s, x) => s + siloKgDay(x), 0)
+  const totalCostDay  = silos.reduce((s, silo) => s + (siloKgDay(silo) / 1000 * (priceMap[silo.material || ''] || 520)), 0)
+  const totalCapKg    = silos.reduce((s, x) => s + x.capacity_kg, 0)
+  const projKg        = silos.reduce((s, x) => s + Math.max(0, x.kg_remaining - siloKgDay(x) * horizon), 0)
   const criticalAtEnd = silos.filter(x => projPct(x, siloKgDay(x), horizon) <= 20).length
-  const avgDays      = silos.length > 0 ? Math.round(silos.reduce((s, x) => s + x.days_remaining, 0) / silos.length) : 0
   const avgLevelToday = silos.length > 0 ? Math.round(silos.reduce((s, x) => s + x.level_pct, 0) / silos.length) : 0
 
   const { labels, consData, costData } = useMemo(() => {
@@ -50,9 +48,9 @@ export default function ForecastPage() {
   }, [horizon, totalKgDay, totalCostDay])
 
   const scenarios = [
-    { label: 'Base case', color: '#4CAF7D', mult: 1.0, cls: 'green' },
+    { label: 'Base case',        color: '#4CAF7D', mult: 1.0,  cls: 'green' },
     { label: '+10% consumption', color: '#EF9F27', mult: 1.10, cls: 'amber' },
-    { label: '+15% price spike', color: '#E24B4A', mult: 1.15, cls: 'red' },
+    { label: '+15% price spike', color: '#E24B4A', mult: 1.15, cls: 'red'   },
   ]
 
   if (loading) return (
@@ -70,8 +68,6 @@ export default function ForecastPage() {
         <div><div className="page-title">Forecast</div><div className="page-sub">Consumption & cost projections · Based on real sensor data</div></div>
         <div className="page-actions"><button className="btn-outline">Export report</button></div>
       </div>
-
-      <AIInsightCard page="forecast" />
 
       <div style={{ display: 'flex', gap: 0, background: '#f0f4f0', borderRadius: 8, padding: 3, marginBottom: 20, width: 'fit-content' }}>
         {[7, 15, 30].map(h => (
@@ -137,7 +133,7 @@ export default function ForecastPage() {
         <div className="card-header"><div className="card-title">Cost scenarios — next {horizon} days</div></div>
         <div className="grid-3" style={{ marginBottom: 0 }}>
           {scenarios.map((sc, i) => {
-            const costTotal = Math.round(totalCostDay * sc.mult * horizon)
+            const costTotal     = Math.round(totalCostDay * sc.mult * horizon)
             const costPerAnimal = totalAnimals > 0 ? (totalCostDay * sc.mult / totalAnimals).toFixed(2) : '—'
             return (
               <div key={sc.label} style={{ borderRadius: 10, padding: 18, border: `0.5px solid ${i === 0 ? '#4CAF7D' : '#e8ede9'}`, background: i === 0 ? '#f4fbf7' : '#fff' }}>
@@ -148,9 +144,9 @@ export default function ForecastPage() {
                 <div style={{ height: '0.5px', background: '#e8ede9', marginBottom: 12 }} />
                 {[
                   { k: 'Feed consumed', v: `${(totalKgDay * sc.mult * horizon / 1000).toFixed(1)} t` },
-                  { k: 'Total cost', v: `$${costTotal.toLocaleString()}`, c: sc.cls },
+                  { k: 'Total cost',    v: `$${costTotal.toLocaleString()}`, c: sc.cls },
                   { k: '$/animal/day', v: `$${costPerAnimal}`, c: sc.cls },
-                  { k: 'Daily avg', v: `$${Math.round(totalCostDay * sc.mult).toLocaleString()}` },
+                  { k: 'Daily avg',    v: `$${Math.round(totalCostDay * sc.mult).toLocaleString()}` },
                 ].map(r => (
                   <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0' }}>
                     <span style={{ fontSize: 11, color: '#8a9aaa' }}>{r.k}</span>
