@@ -684,7 +684,7 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
     onMsg('User updated')
     loadUsers()
   }
-
+  
   async function removeUser(userId: string, email: string) {
     if (!confirm(`Remove user ${email}?`)) return
     const res  = await fetch('/api/admin/delete-user', {
