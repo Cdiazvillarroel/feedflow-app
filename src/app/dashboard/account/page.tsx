@@ -698,21 +698,25 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
   }
 
   async function createUser() {
-    if (!form.email || !form.password || form.farm_ids.length === 0) {
-      setError('Email, password and at least one farm are required')
-      return
-    }
-    setSaving(true); setError('')
-    const res  = await fetch('/api/admin/create-user', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: form.email, password: form.password, role: form.role, farm_ids: form.farm_ids }),
-    })
-    const data = await res.json()
-    if (data.error) { setError(data.error); setSaving(false); return }
-    onMsg('User created')
-    setForm(empty); setSaving(false); loadUsers()
+  if (!form.email || !form.password || form.farm_ids.length === 0) {
+    setError('Email, password and at least one farm are required')
+    return
   }
-
+  setSaving(true); setError('')
+  const res = await fetch('/api/admin/create-user', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: form.email, password: form.password, role: form.role, farm_ids: form.farm_ids }),
+  })
+  const data = await res.json()
+  if (data.error) { setError(data.error); setSaving(false); return }
+  onMsg('User created')
+  setForm(empty)
+  setSaving(false)
+  // Small delay to let Supabase propagate the new user
+  await new Promise(r => setTimeout(r, 800))
+  await loadUsers()
+  }
+  
   const roleBadge = (r: string) =>
     r === 'owner'   ? { bg: '#eaf5ee', color: '#27500A' } :
     r === 'manager' ? { bg: '#E6F1FB', color: '#0C447C' } :
