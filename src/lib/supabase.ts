@@ -4,9 +4,8 @@ const url  = process.env.NEXT_PUBLIC_SUPABASE_URL  || 'https://placeholder.supab
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
 const svc  = process.env.SUPABASE_SERVICE_ROLE_KEY || anon
 
-// Singleton pattern — prevents multiple GoTrueClient instances
 const globalForSupabase = globalThis as unknown as {
-  supabase: SupabaseClient | undefined
+  supabase:      SupabaseClient | undefined
   supabaseAdmin: SupabaseClient | undefined
 }
 
@@ -17,7 +16,7 @@ export const supabaseAdmin: SupabaseClient =
   globalForSupabase.supabaseAdmin ?? createClient(url, svc)
 
 if (process.env.NODE_ENV !== 'production') {
-  globalForSupabase.supabase = supabase
+  globalForSupabase.supabase      = supabase
   globalForSupabase.supabaseAdmin = supabaseAdmin
 }
 
