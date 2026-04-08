@@ -245,7 +245,9 @@ export default function LogisticsPage() {
     try {
       const res    = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] }) })
       const data   = await res.json()
-      const parsed = JSON.parse((data.content?.[0]?.text || '').replace(/```json|```/g, '').trim())
+      const rawText = data.content?.[0]?.text || ''
+      const cleaned = rawText.replace(/```json/g, '').replace(/```/g, '').trim()
+      const parsed  = JSON.parse(cleaned)
       const stops  = (parsed.stops || []).map((s: any) => {
         const farm = farms.find(f => f.id === s.farm_id) || farms.find(f => f.name === s.farm_name)
         const fd   = farmData.find(f => f.farm.id === farm?.id)
