@@ -992,4 +992,3 @@ export default function LogisticsPage() {
     </>
   )
 }
-```
