@@ -21,6 +21,32 @@ const ROUTE_STATUS: Record<string, { bg: string; color: string; label: string }>
   completed:   { bg: '#f0f4f0', color: '#aab8c0', label: 'Completed'   },
 }
 
+// Australian Public Holidays 2025–2026
+const AU_HOLIDAYS: Record<string, { name: string; states: string[] }> = {
+  '2025-01-01': { name: "New Year's Day",    states: ['ALL'] },
+  '2025-01-27': { name: 'Australia Day',     states: ['ALL'] },
+  '2025-04-18': { name: 'Good Friday',       states: ['ALL'] },
+  '2025-04-19': { name: 'Easter Saturday',   states: ['VIC','NSW','QLD','SA'] },
+  '2025-04-20': { name: 'Easter Sunday',     states: ['ALL'] },
+  '2025-04-21': { name: 'Easter Monday',     states: ['ALL'] },
+  '2025-04-25': { name: 'ANZAC Day',         states: ['ALL'] },
+  '2025-06-09': { name: "King's Birthday",   states: ['VIC','NSW','SA','TAS'] },
+  '2025-11-04': { name: 'Melbourne Cup',     states: ['VIC'] },
+  '2025-12-25': { name: 'Christmas Day',     states: ['ALL'] },
+  '2025-12-26': { name: 'Boxing Day',        states: ['ALL'] },
+  '2026-01-01': { name: "New Year's Day",    states: ['ALL'] },
+  '2026-01-26': { name: 'Australia Day',     states: ['ALL'] },
+  '2026-04-03': { name: 'Good Friday',       states: ['ALL'] },
+  '2026-04-04': { name: 'Easter Saturday',   states: ['VIC','NSW','QLD','SA'] },
+  '2026-04-05': { name: 'Easter Sunday',     states: ['ALL'] },
+  '2026-04-06': { name: 'Easter Monday',     states: ['ALL'] },
+  '2026-04-25': { name: 'ANZAC Day',         states: ['ALL'] },
+  '2026-06-08': { name: "King's Birthday",   states: ['VIC','NSW','SA','TAS'] },
+  '2026-11-03': { name: 'Melbourne Cup',     states: ['VIC'] },
+  '2026-12-25': { name: 'Christmas Day',     states: ['ALL'] },
+  '2026-12-26': { name: 'Boxing Day',        states: ['ALL'] },
+}
+
 function iStyle(full = false): React.CSSProperties {
   return { width: full ? '100%' : 'auto', padding: '8px 10px', border: '0.5px solid #c8d8cc', borderRadius: 7, fontSize: 13, color: '#1a2530', background: '#fff', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }
 }
@@ -37,25 +63,74 @@ function distKm(lat1: number, lng1: number, lat2: number, lng2: number) {
   return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
 }
 
+function buildGoogleMapsUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
+  const origin = mill.lat && mill.lng
+    ? `${mill.lat},${mill.lng}`
+    : encodeURIComponent(mill.location || mill.name)
+
+  const sorted = [...stops].sort((a, b) => a.order - b.order)
+  if (sorted.length === 0) return `https://www.google.com/maps/search/?q=${encodeURIComponent(mill.location || mill.name)}`
+
+  const waypoints = sorted.slice(0, -1).map(s => {
+    const farm = farms.find(f => f.id === s.farm_id)
+    return farm?.lat && farm?.lng ? `${farm.lat},${farm.lng}` : encodeURIComponent(s.location || s.farm_name || '')
+  })
+  const last = sorted[sorted.length - 1]
+  const dest = (() => {
+    const farm = farms.find(f => f.id === last.farm_id)
+    return farm?.lat && farm?.lng ? `${farm.lat},${farm.lng}` : encodeURIComponent(last.location || last.farm_name || '')
+  })()
+
+  let url = `https://www.google.com/maps/dir/${origin}/${waypoints.join('/')}/${dest}`
+  return url
+}
+
+function buildGoogleMapsEmbedUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
+  const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  if (!key) return null
+  const sorted = [...stops].sort((a, b) => a.order - b.order)
+  if (sorted.length === 0) return null
+
+  const origin = mill.lat && mill.lng ? `${mill.lat},${mill.lng}` : encodeURIComponent(mill.location || mill.name)
+  const last = sorted[sorted.length - 1]
+  const dest = (() => {
+    const farm = farms.find(f => f.id === last.farm_id)
+    return farm?.lat && farm?.lng ? `${farm.lat},${farm.lng}` : encodeURIComponent(last.location || last.farm_name)
+  })()
+
+  const wps = sorted.slice(0, -1).map(s => {
+    const farm = farms.find(f => f.id === s.farm_id)
+    return farm?.lat && farm?.lng ? `${farm.lat},${farm.lng}` : encodeURIComponent(s.location || s.farm_name)
+  }).join('|')
+
+  let url = `https://www.google.com/maps/embed/v1/directions?key=${key}&origin=${origin}&destination=${dest}&mode=driving`
+  if (wps) url += `&waypoints=${wps}`
+  return url
+}
+
 export default function RoutesPage() {
-  const [feedMills,  setFeedMills]  = useState<FeedMill[]>([])
-  const [farms,      setFarms]      = useState<Farm[]>([])
-  const [silos,      setSilos]      = useState<Silo[]>([])
-  const [siloStats,  setSiloStats]  = useState<SiloStat[]>([])
-  const [drivers,    setDrivers]    = useState<Driver[]>([])
-  const [trucks,     setTrucks]     = useState<Truck[]>([])
-  const [routes,     setRoutes]     = useState<DeliveryRoute[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [saving,     setSaving]     = useState(false)
-  const [aiLoading,  setAiLoading]  = useState(false)
-  const [msg,        setMsg]        = useState('')
-  const [drawer,     setDrawer]     = useState<DeliveryRoute | 'new' | null>(null)
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [feedMills,   setFeedMills]   = useState<FeedMill[]>([])
+  const [farms,       setFarms]       = useState<Farm[]>([])
+  const [silos,       setSilos]       = useState<Silo[]>([])
+  const [siloStats,   setSiloStats]   = useState<SiloStat[]>([])
+  const [drivers,     setDrivers]     = useState<Driver[]>([])
+  const [trucks,      setTrucks]      = useState<Truck[]>([])
+  const [routes,      setRoutes]      = useState<DeliveryRoute[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [saving,      setSaving]      = useState(false)
+  const [aiLoading,   setAiLoading]   = useState(false)
+  const [msg,         setMsg]         = useState('')
+  const [drawer,      setDrawer]      = useState<DeliveryRoute | 'new' | null>(null)
+  const [filterStatus,setFilterStatus]= useState('all')
+  const [showCal,     setShowCal]     = useState(true)
+  const [calMonth,    setCalMonth]    = useState(new Date())
+  const [mapModal,    setMapModal]    = useState<DeliveryRoute | null>(null)
+  const [aiResult,    setAiResult]    = useState<any[] | null>(null)
+  const [aiReasoning, setAiReasoning] = useState('')
 
   const emptyForm = { feed_mill_id: '', driver_id: '', truck_id: '', name: '', planned_date: new Date().toISOString().split('T')[0], status: 'draft' }
   const [form,           setForm]           = useState(emptyForm)
   const [routeStops,     setRouteStops]     = useState<any[]>([])
-  const [aiReasoning,    setAiReasoning]    = useState('')
   const [selectedFarmIds,setSelectedFarmIds]= useState<string[]>([])
 
   useEffect(() => { loadAll() }, [])
@@ -99,17 +174,51 @@ export default function RoutesPage() {
     const stats = fs.map(s => getStat(s.id)).filter(Boolean) as SiloStat[]
     const minDays    = fs.length > 0 ? Math.min(...fs.map(s => getDays(s.id))) : 999
     const alertLevel = stats.some(s => s.alert_level === 'critical') ? 'critical' : stats.some(s => s.alert_level === 'low') ? 'low' : 'ok'
-    const totalKg    = stats.reduce((sum, s) => sum + s.kg_remaining, 0)
     const totalKgNeeded = fs.reduce((sum, s) => {
       const stat = getStat(s.id)
       return sum + Math.max(0, s.capacity_kg * 0.85 - (stat?.kg_remaining || 0))
     }, 0)
-    return { farm, minDays, alertLevel, totalKg, totalKgNeeded }
+    return { farm, minDays, alertLevel, totalKgNeeded }
   }).sort((a, b) => a.minDays - b.minDays)
 
-  function openNew() {
-    setForm(emptyForm)
+  // ── CALENDAR ────────────────────────────────────────────────
+  function calDays() {
+    const year  = calMonth.getFullYear()
+    const month = calMonth.getMonth()
+    const first = new Date(year, month, 1).getDay()
+    const total = new Date(year, month + 1, 0).getDate()
+    const days: (number | null)[] = []
+    for (let i = 0; i < (first === 0 ? 6 : first - 1); i++) days.push(null)
+    for (let i = 1; i <= total; i++) days.push(i)
+    return days
+  }
+
+  function dateStr(day: number) {
+    const y = calMonth.getFullYear()
+    const m = String(calMonth.getMonth() + 1).padStart(2, '0')
+    const d = String(day).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  function routesForDay(day: number) {
+    const ds = dateStr(day)
+    return routes.filter(r => r.planned_date === ds)
+  }
+
+  function holidayForDay(day: number) {
+    return AU_HOLIDAYS[dateStr(day)]
+  }
+
+  const isToday = (day: number) => {
+    const t = new Date()
+    return t.getFullYear() === calMonth.getFullYear() && t.getMonth() === calMonth.getMonth() && t.getDate() === day
+  }
+
+  // ── OPEN/EDIT ───────────────────────────────────────────────
+  function openNew(date?: string) {
+    setForm({ ...emptyForm, planned_date: date || new Date().toISOString().split('T')[0] })
     setRouteStops([])
+    setAiResult(null)
     setAiReasoning('')
     setSelectedFarmIds([])
     setDrawer('new')
@@ -118,19 +227,22 @@ export default function RoutesPage() {
   function openEdit(r: DeliveryRoute) {
     setForm({ feed_mill_id: r.feed_mill_id, driver_id: r.driver_id || '', truck_id: r.truck_id || '', name: r.name, planned_date: r.planned_date, status: r.status })
     setRouteStops(r.stops || [])
+    setAiResult(null)
     setAiReasoning(r.ai_reasoning || '')
     setSelectedFarmIds((r.stops || []).map((s: any) => s.farm_id))
     setDrawer(r)
   }
 
+  // ── AI ROUTE GENERATION ─────────────────────────────────────
   async function generateAIRoute() {
     if (!form.feed_mill_id || selectedFarmIds.length === 0) return
     setAiLoading(true)
+    setAiResult(null)
     const mill     = feedMills.find(m => m.id === form.feed_mill_id)
     const selFarms = farms.filter(f => selectedFarmIds.includes(f.id))
 
     const farmData = selFarms.map(farm => {
-      const fu = farmUrgency.find(f => f.farm.id === farm.id)
+      const fu   = farmUrgency.find(f => f.farm.id === farm.id)
       const dist = mill?.lat && mill?.lng && farm.lat && farm.lng
         ? Math.round(distKm(mill.lat, mill.lng, farm.lat, farm.lng)) : 999
       const score = (fu?.alertLevel === 'critical' ? 100 : fu?.alertLevel === 'low' ? 60 : 20)
@@ -142,26 +254,27 @@ export default function RoutesPage() {
 
     const prompt = [
       'You are a logistics optimizer for ' + (mill?.name || 'a feed mill') + ' in Victoria, Australia.',
-      'Feed mill location: ' + (mill?.location || 'unknown'),
+      'Feed mill: ' + (mill?.location || mill?.name || 'unknown location'),
       'Route date: ' + form.planned_date,
       '',
       'Farms to visit:',
       farmData.map((f, i) => [
         (i+1) + '. ' + f.farm.name + ' (' + (f.farm.location || 'no address') + ')',
-        '   Days remaining: ' + f.minDays + ' | Alert: ' + f.alertLevel + ' | Distance from mill: ' + f.dist + 'km',
-        '   Feed needed: ' + (f.totalKgNeeded/1000).toFixed(1) + 't | Materials: ' + (f.materials.join(', ') || 'unknown'),
+        '   Days remaining: ' + f.minDays + ' | Alert: ' + f.alertLevel + ' | Distance: ' + f.dist + 'km',
+        '   Feed needed: ' + (f.totalKgNeeded/1000).toFixed(1) + 't | Materials: ' + (f.materials.join(', ') || 'mixed'),
         '   Priority score: ' + f.score,
       ].join('\n')).join('\n\n'),
       '',
-      'Optimize the delivery sequence considering urgency, geographic proximity, and load. Return JSON only:',
-      '{"stops":[{"farm_id":"...","farm_name":"...","order":1,"reason":"...","estimated_km":0,"kg_to_deliver":0}],"total_km":0,"reasoning":"..."}',
+      'Optimize delivery sequence considering urgency, geographic proximity, and load capacity.',
+      'Return JSON only, no markdown:',
+      '{"stops":[{"farm_id":"...","farm_name":"...","order":1,"reason":"why this position","estimated_km":0,"kg_to_deliver":0}],"total_km":0,"reasoning":"brief explanation"}',
     ].join('\n')
 
     try {
-      const res  = await fetch('https://api.anthropic.com/v1/messages', {
+      const res    = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] }),
+        body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] }),
       })
       const data    = await res.json()
       const rawText = data.content?.[0]?.text || ''
@@ -170,26 +283,59 @@ export default function RoutesPage() {
       const stops   = (parsed.stops || []).map((s: any) => {
         const farm = farms.find(f => f.id === s.farm_id) || farms.find(f => f.name === s.farm_name)
         const fd   = farmData.find(f => f.farm.id === farm?.id)
-        return { ...s, farm_id: farm?.id || s.farm_id, farm_name: farm?.name || s.farm_name, location: farm?.location, days_remaining: fd?.minDays, alert_level: fd?.alertLevel, kg_to_deliver: s.kg_to_deliver || fd?.totalKgNeeded || 0 }
+        return { ...s, farm_id: farm?.id || s.farm_id, farm_name: farm?.name || s.farm_name, location: farm?.location, lat: farm?.lat, lng: farm?.lng, days_remaining: fd?.minDays, alert_level: fd?.alertLevel, kg_to_deliver: s.kg_to_deliver || fd?.totalKgNeeded || 0 }
       })
-      setRouteStops(stops)
+      setAiResult(stops)
       setAiReasoning(parsed.reasoning || '')
-      if (!form.name) setRouteForm(form.planned_date + ' — ' + (mill?.name || ''))
+      if (!form.name) setForm(p => ({ ...p, name: form.planned_date + ' — ' + (mill?.name || '') }))
     } catch {
-      const stops = farmData.map((f, i) => ({ farm_id: f.farm.id, farm_name: f.farm.name, order: i+1, reason: f.alertLevel === 'critical' ? 'Critical urgency' : f.minDays + ' days remaining', estimated_km: f.dist, kg_to_deliver: f.totalKgNeeded, location: f.farm.location, days_remaining: f.minDays, alert_level: f.alertLevel }))
-      setRouteStops(stops)
-      setAiReasoning('Route generated by urgency + distance scoring (AI unavailable)')
+      // Fallback: sort by score
+      const stops = farmData.map((f, i) => ({ farm_id: f.farm.id, farm_name: f.farm.name, order: i+1, reason: f.alertLevel === 'critical' ? 'Critical urgency' : f.minDays + 'd remaining', estimated_km: f.dist, kg_to_deliver: f.totalKgNeeded, location: f.farm.location, lat: f.farm.lat, lng: f.farm.lng, days_remaining: f.minDays, alert_level: f.alertLevel }))
+      setAiResult(stops)
+      setAiReasoning('Generated by urgency + distance scoring (AI temporarily unavailable)')
+      if (!form.name) setForm(p => ({ ...p, name: form.planned_date + ' — ' + (mill?.name || '') }))
     }
     setAiLoading(false)
   }
 
-  function setRouteForm(name: string) { setForm(p => ({ ...p, name })) }
+  function approveAiRoute() {
+    if (!aiResult) return
+    setRouteStops(aiResult)
+    setAiResult(null)
+    showMsg('Route approved — review and save')
+  }
 
+  function moveStop(idx: number, dir: -1 | 1) {
+    const newStops = [...routeStops]
+    const target   = idx + dir
+    if (target < 0 || target >= newStops.length) return
+    ;[newStops[idx], newStops[target]] = [newStops[target], newStops[idx]]
+    newStops.forEach((s, i) => s.order = i + 1)
+    setRouteStops(newStops)
+  }
+
+  function removeStop(idx: number) {
+    const newStops = routeStops.filter((_, i) => i !== idx)
+    newStops.forEach((s, i) => s.order = i + 1)
+    setRouteStops(newStops)
+  }
+
+  // ── SAVE ────────────────────────────────────────────────────
   async function save() {
     if (!form.feed_mill_id || !form.name) return
     setSaving(true)
     const totalKm = routeStops.reduce((sum, s) => sum + (s.estimated_km || 0), 0)
-    const payload = { feed_mill_id: form.feed_mill_id, driver_id: form.driver_id || null, truck_id: form.truck_id || null, name: form.name, planned_date: form.planned_date, status: form.status, stops: routeStops, ai_reasoning: aiReasoning || null, total_km: totalKm }
+    const payload = {
+      feed_mill_id: form.feed_mill_id,
+      driver_id:    form.driver_id || null,
+      truck_id:     form.truck_id  || null,
+      name:         form.name,
+      planned_date: form.planned_date,
+      status:       form.status,
+      stops:        routeStops,
+      ai_reasoning: aiReasoning || null,
+      total_km:     totalKm || null,
+    }
     if (drawer && drawer !== 'new') {
       await supabase.from('delivery_routes').update(payload).eq('id', (drawer as DeliveryRoute).id)
       showMsg('Route updated')
@@ -204,6 +350,15 @@ export default function RoutesPage() {
     if (!confirm('Delete this route?')) return
     await supabase.from('delivery_routes').delete().eq('id', id)
     setDrawer(null); showMsg('Route deleted'); loadAll()
+  }
+
+  async function duplicate(r: DeliveryRoute) {
+    await supabase.from('delivery_routes').insert({
+      feed_mill_id: r.feed_mill_id, driver_id: r.driver_id, truck_id: r.truck_id,
+      name: r.name + ' (copy)', planned_date: r.planned_date, status: 'draft',
+      stops: r.stops, ai_reasoning: r.ai_reasoning, total_km: r.total_km,
+    })
+    showMsg('Route duplicated'); loadAll()
   }
 
   const isEdit   = drawer && drawer !== 'new'
@@ -221,11 +376,69 @@ export default function RoutesPage() {
 
   return (
     <>
-      {/* DRAWER */}
+      {/* ── MAP MODAL ─────────────────────────────────────────── */}
+      {mapModal && (
+        <>
+          <div onClick={() => setMapModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 300 }} />
+          <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: '90vw', maxWidth: 900, height: '80vh', background: '#fff', zIndex: 301, borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '0.5px solid #e8ede9', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2530' }}>{mapModal.name}</div>
+                <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 2 }}>
+                  {millName(mapModal.feed_mill_id)} · {new Date(mapModal.planned_date + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long' })} · {mapModal.stops?.length || 0} stops
+                </div>
+              </div>
+              <a href={buildGoogleMapsUrl(feedMills.find(m => m.id === mapModal.feed_mill_id) || { id: '', name: '', location: null, lat: null, lng: null }, mapModal.stops || [], farms)} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: 12, padding: '7px 14px', borderRadius: 7, background: '#4A90C4', color: '#fff', fontWeight: 600, textDecoration: 'none', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                </svg>
+                Open in Google Maps
+              </a>
+              <button onClick={() => setMapModal(null)} style={{ width: 30, height: 30, borderRadius: '50%', border: '0.5px solid #e8ede9', background: '#f7f9f8', cursor: 'pointer', fontSize: 16, color: '#8a9aaa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            </div>
+            {(() => {
+              const mill    = feedMills.find(m => m.id === mapModal.feed_mill_id)
+              const embedUrl = mill ? buildGoogleMapsEmbedUrl(mill, mapModal.stops || [], farms) : null
+              return embedUrl ? (
+                <iframe src={embedUrl} style={{ flex: 1, border: 'none' }} allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
+              ) : (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, color: '#8a9aaa' }}>
+                  <div style={{ fontSize: 40 }}>🗺️</div>
+                  <div style={{ fontSize: 14, color: '#1a2530', fontWeight: 500 }}>Map unavailable</div>
+                  <div style={{ fontSize: 12, color: '#aab8c0', textAlign: 'center', maxWidth: 320 }}>
+                    Add <code style={{ background: '#f0f4f0', padding: '2px 6px', borderRadius: 4 }}>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to Vercel environment variables to enable embedded maps.
+                  </div>
+                  <a href={mill ? buildGoogleMapsUrl(mill, mapModal.stops || [], farms) : '#'} target="_blank" rel="noopener noreferrer"
+                    style={{ padding: '10px 20px', background: '#4A90C4', color: '#fff', borderRadius: 8, textDecoration: 'none', fontSize: 13, fontWeight: 600 }}>
+                    Open in Google Maps instead →
+                  </a>
+                </div>
+              )
+            })()}
+            {/* Stop list below map */}
+            <div style={{ padding: '12px 20px', borderTop: '0.5px solid #e8ede9', display: 'flex', gap: 8, overflowX: 'auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a2530', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff' }}>S</div>
+                <span style={{ fontSize: 11, color: '#6a7a8a', maxWidth: 100, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{feedMills.find(m => m.id === mapModal.feed_mill_id)?.name}</span>
+              </div>
+              {[...(mapModal.stops || [])].sort((a, b) => a.order - b.order).map((stop, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <div style={{ color: '#aab8c0', fontSize: 16 }}>→</div>
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: stop.alert_level === 'critical' ? '#E24B4A' : stop.alert_level === 'low' ? '#EF9F27' : '#4CAF7D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff' }}>{idx+1}</div>
+                  <span style={{ fontSize: 11, color: '#1a2530', maxWidth: 120, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 500 }}>{stop.farm_name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── ROUTE DRAWER ──────────────────────────────────────── */}
       {drawer && (
         <>
           <div onClick={() => setDrawer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }} />
-          <div style={{ position: 'fixed', top: 0, right: 0, width: 540, height: '100vh', background: '#fff', zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)' }}>
+          <div style={{ position: 'fixed', top: 0, right: 0, width: 560, height: '100vh', background: '#fff', zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)' }}>
 
             <div style={{ padding: '20px 24px', borderBottom: '0.5px solid #e8ede9', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: '#E6F1FB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -235,18 +448,18 @@ export default function RoutesPage() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2530' }}>{isEdit ? 'Edit route' : 'Plan delivery route'}</div>
-                <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 2 }}>AI-optimized multi-farm delivery planning</div>
+                <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 2 }}>AI-assisted multi-farm delivery planning</div>
               </div>
               <button onClick={() => setDrawer(null)} style={{ width: 30, height: 30, borderRadius: '50%', border: '0.5px solid #e8ede9', background: '#f7f9f8', cursor: 'pointer', fontSize: 16, color: '#8a9aaa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <SecTitle title="Route setup" />
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-              <div><label style={lStyle()}>Route name</label>
+              {/* Setup */}
+              <SecTitle title="Route setup" />
+              <div><label style={lStyle()}>Route name *</label>
                 <input style={iStyle(true)} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Monday run — Reid Stockfeed" />
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={lStyle()}>Feed mill *</label>
@@ -257,9 +470,11 @@ export default function RoutesPage() {
                 </div>
                 <div><label style={lStyle()}>Planned date</label>
                   <input type="date" style={iStyle(true)} value={form.planned_date} onChange={e => setForm(p => ({ ...p, planned_date: e.target.value }))} />
+                  {AU_HOLIDAYS[form.planned_date] && (
+                    <div style={{ fontSize: 10, color: '#A32D2D', marginTop: 4, fontWeight: 600 }}>⚠️ {AU_HOLIDAYS[form.planned_date].name}</div>
+                  )}
                 </div>
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={lStyle()}>Assign driver</label>
@@ -276,7 +491,6 @@ export default function RoutesPage() {
                   </select>
                 </div>
               </div>
-
               <div>
                 <label style={lStyle()}>Status</label>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -289,26 +503,26 @@ export default function RoutesPage() {
                 </div>
               </div>
 
-              <SecTitle title="AI route planner" />
-
-              <div style={{ background: '#f7f9f8', borderRadius: 10, padding: '14px 16px' }}>
-                <div style={{ fontSize: 12, color: '#6a7a8a', marginBottom: 12, lineHeight: 1.5 }}>
-                  Select farms to visit. The AI will optimize the delivery sequence based on urgency, distance from the mill, and feed requirements.
+              {/* AI Planner */}
+              <SecTitle title="✦ AI Route Planner" />
+              <div style={{ background: '#f7f9f8', borderRadius: 12, padding: '16px' }}>
+                <div style={{ fontSize: 12, color: '#6a7a8a', marginBottom: 12, lineHeight: 1.6 }}>
+                  Select farms · AI optimizes by urgency, distance & load · Review & edit before approving
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14, maxHeight: 260, overflowY: 'auto' }}>
                   {farmUrgency.map(({ farm, minDays, alertLevel, totalKgNeeded }) => {
-                    const checked = selectedFarmIds.includes(farm.id)
-                    const mill    = feedMills.find(m => m.id === form.feed_mill_id)
-                    const dist    = mill?.lat && mill?.lng && farm.lat && farm.lng ? Math.round(distKm(mill.lat, mill.lng, farm.lat, farm.lng)) : null
-                    const urgColor = alertLevel === 'critical' ? '#E24B4A' : alertLevel === 'low' ? '#EF9F27' : '#4CAF7D'
+                    const checked   = selectedFarmIds.includes(farm.id)
+                    const mill      = feedMills.find(m => m.id === form.feed_mill_id)
+                    const dist      = mill?.lat && mill?.lng && farm.lat && farm.lng ? Math.round(distKm(mill.lat, mill.lng, farm.lat, farm.lng)) : null
+                    const urgColor  = alertLevel === 'critical' ? '#E24B4A' : alertLevel === 'low' ? '#EF9F27' : '#4CAF7D'
                     return (
-                      <label key={farm.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: '0.5px solid ' + (checked ? '#4CAF7D' : '#e8ede9'), background: checked ? '#f4fbf7' : '#fff', cursor: 'pointer' }}>
+                      <label key={farm.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: '0.5px solid ' + (checked ? '#4CAF7D' : '#e8ede9'), background: checked ? '#f4fbf7' : '#fff', cursor: 'pointer' }}>
                         <input type="checkbox" checked={checked} onChange={() => setSelectedFarmIds(prev => checked ? prev.filter(id => id !== farm.id) : [...prev, farm.id])} style={{ accentColor: '#4CAF7D', width: 14, height: 14 }} />
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: checked ? 600 : 400, color: '#1a2530' }}>{farm.name}</div>
                           <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>
-                            {minDays < 999 ? minDays + ' days' : 'No data'}
-                            {dist !== null ? ' · ' + dist + ' km from mill' : ''}
+                            {minDays < 999 ? minDays + 'd left' : 'No data'}
+                            {dist !== null ? ' · ' + dist + ' km' : ''}
                             {totalKgNeeded > 0 ? ' · ' + (totalKgNeeded/1000).toFixed(0) + 't needed' : ''}
                           </div>
                         </div>
@@ -317,76 +531,130 @@ export default function RoutesPage() {
                             {alertLevel}
                           </span>
                         )}
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: minDays <= 7 ? '#A32D2D' : minDays <= 14 ? '#633806' : urgColor }}>{minDays < 999 ? minDays + 'd' : '—'}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: minDays <= 7 ? '#A32D2D' : minDays <= 14 ? '#633806' : urgColor, flexShrink: 0 }}>
+                          {minDays < 999 ? minDays + 'd' : '—'}
                         </div>
                       </label>
                     )
                   })}
                 </div>
-
                 <button onClick={generateAIRoute} disabled={aiLoading || !form.feed_mill_id || selectedFarmIds.length === 0}
-                  style={{ width: '100%', padding: '11px', background: aiLoading ? '#aab8c0' : '#1a2530', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  style={{ width: '100%', padding: '11px', background: aiLoading ? '#aab8c0' : 'linear-gradient(135deg, #1a2530 0%, #2d3f50 100%)', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                   {aiLoading
                     ? <><div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> Generating optimized route...</>
                     : '✦ Generate AI route'}
                 </button>
               </div>
 
-              {routeStops.length > 0 && (
-                <>
-                  <SecTitle title={'Optimized route — ' + routeStops.length + ' stops'} />
-
+              {/* AI Result — Review before approving */}
+              {aiResult && (
+                <div style={{ background: '#fff8e6', borderRadius: 12, padding: '16px', border: '0.5px solid #f0cc70' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#633806', textTransform: 'uppercase', letterSpacing: '0.4px' }}>✦ AI Suggestion — Review before approving</div>
+                    <button onClick={() => setAiResult(null)} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '0.5px solid #e0c060', background: 'transparent', color: '#633806', cursor: 'pointer', fontFamily: 'inherit' }}>Dismiss</button>
+                  </div>
                   {aiReasoning && (
-                    <div style={{ background: '#f7f9f8', borderRadius: 8, padding: '12px 14px', fontSize: 12, color: '#6a7a8a', lineHeight: 1.6, borderLeft: '3px solid #4CAF7D' }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#4CAF7D', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>AI Reasoning</div>
+                    <div style={{ fontSize: 12, color: '#633806', lineHeight: 1.6, marginBottom: 12, padding: '8px 12px', background: 'rgba(255,200,50,0.15)', borderRadius: 6 }}>
                       {aiReasoning}
                     </div>
                   )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                    {[...aiResult].sort((a, b) => a.order - b.order).map((stop, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: 10, padding: '10px 12px', background: '#fff', borderRadius: 8, border: '0.5px solid #e8ede9' }}>
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#EF9F27', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{idx+1}</div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{stop.farm_name}</div>
+                          <div style={{ fontSize: 11, color: '#8a9aaa' }}>{stop.reason} {stop.estimated_km ? '· ' + stop.estimated_km + 'km' : ''}</div>
+                        </div>
+                        {stop.kg_to_deliver > 0 && <div style={{ fontSize: 11, color: '#aab8c0', flexShrink: 0 }}>{(stop.kg_to_deliver/1000).toFixed(0)}t</div>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={approveAiRoute}
+                      style={{ flex: 1, padding: '10px', background: '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+                      ✓ Approve this route
+                    </button>
+                    <div style={{ fontSize: 12, color: '#8a9aaa', display: 'flex', alignItems: 'center', paddingLeft: 4 }}>
+                      {aiResult.reduce((sum, s) => sum + (s.estimated_km || 0), 0)} km est.
+                    </div>
+                  </div>
+                </div>
+              )}
 
+              {/* Approved stops — editable */}
+              {routeStops.length > 0 && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <SecTitle title={'Route stops — ' + routeStops.length + ' farms'} />
+                    {isEdit && (
+                      <button onClick={() => { const mill = feedMills.find(m => m.id === form.feed_mill_id); if (mill) setMapModal(drawer as DeliveryRoute) }}
+                        style={{ fontSize: 11, padding: '4px 12px', borderRadius: 6, border: '0.5px solid #4A90C4', background: '#E6F1FB', color: '#0C447C', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, marginBottom: 12 }}>
+                        🗺️ View route
+                      </button>
+                    )}
+                  </div>
+                  {aiReasoning && !aiResult && (
+                    <div style={{ background: '#f7f9f8', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#6a7a8a', lineHeight: 1.5, borderLeft: '3px solid #4CAF7D', marginBottom: 4 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#4CAF7D', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 3 }}>AI Reasoning</div>
+                      {aiReasoning}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {[...routeStops].sort((a, b) => a.order - b.order).map((stop, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 12, padding: '12px 14px', background: '#fff', borderRadius: 8, border: '0.5px solid #e8ede9' }}>
+                      <div key={idx} style={{ display: 'flex', gap: 10, padding: '12px 14px', background: '#fff', borderRadius: 8, border: '0.5px solid #e8ede9' }}>
                         <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#1a2530', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{idx+1}</div>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530', marginBottom: 2 }}>{stop.farm_name}</div>
                           <div style={{ fontSize: 11, color: '#8a9aaa' }}>
                             {stop.location || 'No address'}
-                            {stop.estimated_km ? ' · ' + stop.estimated_km + ' km from mill' : ''}
+                            {stop.estimated_km ? ' · ' + stop.estimated_km + ' km' : ''}
                           </div>
-                          {stop.reason && <div style={{ fontSize: 11, color: '#4CAF7D', fontStyle: 'italic', marginTop: 3 }}>{stop.reason}</div>}
+                          {stop.reason && <div style={{ fontSize: 11, color: '#4CAF7D', fontStyle: 'italic', marginTop: 2 }}>{stop.reason}</div>}
                         </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          {stop.days_remaining && stop.days_remaining < 999 && (
-                            <div style={{ fontSize: 12, fontWeight: 700, color: stop.days_remaining <= 7 ? '#A32D2D' : stop.days_remaining <= 14 ? '#633806' : '#27500A' }}>{stop.days_remaining}d</div>
-                          )}
-                          {stop.kg_to_deliver > 0 && <div style={{ fontSize: 11, color: '#aab8c0' }}>{(stop.kg_to_deliver/1000).toFixed(0)}t</div>}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 }}>
+                          <button onClick={() => moveStop(idx, -1)} disabled={idx === 0}
+                            style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid #e8ede9', background: '#fff', cursor: idx === 0 ? 'default' : 'pointer', fontSize: 10, color: idx === 0 ? '#e8ede9' : '#6a7a8a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▲</button>
+                          <button onClick={() => moveStop(idx, 1)} disabled={idx === routeStops.length - 1}
+                            style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid #e8ede9', background: '#fff', cursor: idx === routeStops.length - 1 ? 'default' : 'pointer', fontSize: 10, color: idx === routeStops.length - 1 ? '#e8ede9' : '#6a7a8a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>▼</button>
+                          <button onClick={() => removeStop(idx)}
+                            style={{ width: 22, height: 22, borderRadius: 4, border: '0.5px solid #F09595', background: '#FCEBEB', cursor: 'pointer', fontSize: 10, color: '#A32D2D', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                         </div>
                       </div>
                     ))}
                   </div>
-
                   <div style={{ background: '#E6F1FB', borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 700, color: '#0C447C', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total estimated</div>
-                      <div style={{ fontSize: 11, color: '#4A90C4', marginTop: 2 }}>{routeStops.length} stops · {routeStops.reduce((sum, s) => sum + (s.kg_to_deliver || 0), 0) > 0 ? (routeStops.reduce((sum, s) => sum + (s.kg_to_deliver || 0), 0)/1000).toFixed(0) + 't to deliver' : ''}</div>
+                      <div style={{ fontSize: 11, color: '#4A90C4', marginTop: 2 }}>
+                        {routeStops.length} stops · {(routeStops.reduce((sum, s) => sum + (s.kg_to_deliver || 0), 0)/1000).toFixed(0)}t to deliver
+                      </div>
                     </div>
-                    <div style={{ fontSize: 24, fontWeight: 700, color: '#0C447C' }}>{routeStops.reduce((sum, s) => sum + (s.estimated_km || 0), 0)} km</div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 24, fontWeight: 700, color: '#0C447C' }}>{routeStops.reduce((sum, s) => sum + (s.estimated_km || 0), 0)}</div>
+                      <div style={{ fontSize: 10, color: '#4A90C4', textTransform: 'uppercase' }}>km</div>
+                    </div>
                   </div>
                 </>
               )}
             </div>
 
             <div style={{ padding: '16px 24px', borderTop: '0.5px solid #e8ede9', display: 'flex', gap: 10 }}>
-              <button onClick={save} disabled={saving || !form.feed_mill_id || !form.name || routeStops.length === 0}
+              <button onClick={save} disabled={saving || !form.feed_mill_id || !form.name}
                 style={{ flex: 1, padding: '10px', background: saving ? '#aab8c0' : '#4A90C4', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {saving ? 'Saving...' : isEdit ? 'Update route' : 'Save route'}
               </button>
               {isEdit && (
-                <button onClick={() => remove((drawer as DeliveryRoute).id)}
-                  style={{ padding: '10px 14px', background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#A32D2D', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  Delete
-                </button>
+                <>
+                  <button onClick={() => duplicate(drawer as DeliveryRoute)}
+                    style={{ padding: '10px 14px', background: '#E6F1FB', border: '0.5px solid #4A90C4', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#0C447C', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Duplicate
+                  </button>
+                  <button onClick={() => remove((drawer as DeliveryRoute).id)}
+                    style={{ padding: '10px 14px', background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#A32D2D', cursor: 'pointer', fontFamily: 'inherit' }}>
+                    Delete
+                  </button>
+                </>
               )}
               <button onClick={() => setDrawer(null)}
                 style={{ padding: '10px 14px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#6a7a8a', fontFamily: 'inherit' }}>
@@ -397,7 +665,7 @@ export default function RoutesPage() {
         </>
       )}
 
-      {/* HEADER */}
+      {/* ── HEADER ────────────────────────────────────────────── */}
       <div className="page-header">
         <div>
           <div className="page-title">Route Planner</div>
@@ -405,11 +673,15 @@ export default function RoutesPage() {
         </div>
         <div className="page-actions">
           {msg && <div style={{ padding: '7px 14px', background: '#eaf5ee', border: '0.5px solid #4CAF7D', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#27500A' }}>{'✓ ' + msg}</div>}
-          <button className="btn-primary" onClick={openNew}>+ Plan route</button>
+          <button onClick={() => setShowCal(p => !p)}
+            style={{ padding: '8px 14px', borderRadius: 7, border: '0.5px solid #e8ede9', background: showCal ? '#E6F1FB' : '#fff', color: showCal ? '#0C447C' : '#6a7a8a', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+            📅 Calendar
+          </button>
+          <button className="btn-primary" onClick={() => openNew()}>+ Plan route</button>
         </div>
       </div>
 
-      {/* SUMMARY */}
+      {/* ── SUMMARY ───────────────────────────────────────────── */}
       <div className="summary-row">
         {Object.entries(ROUTE_STATUS).map(([k, v]) => (
           <div key={k} className="sum-card" onClick={() => setFilterStatus(filterStatus === k ? 'all' : k)}
@@ -421,22 +693,100 @@ export default function RoutesPage() {
         ))}
       </div>
 
-      {/* ROUTES LIST */}
+      {/* ── CALENDAR ──────────────────────────────────────────── */}
+      {showCal && (
+        <div style={{ background: '#fff', borderRadius: 12, border: '0.5px solid #e8ede9', padding: '20px', marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() - 1))}
+              style={{ width: 28, height: 28, borderRadius: 6, border: '0.5px solid #e8ede9', background: '#f7f9f8', cursor: 'pointer', fontSize: 14, color: '#6a7a8a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2530' }}>
+              {calMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })}
+            </div>
+            <button onClick={() => setCalMonth(new Date(calMonth.getFullYear(), calMonth.getMonth() + 1))}
+              style={{ width: 28, height: 28, borderRadius: 6, border: '0.5px solid #e8ede9', background: '#f7f9f8', cursor: 'pointer', fontSize: 14, color: '#6a7a8a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+          </div>
+
+          {/* Day headers */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 8 }}>
+            {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => (
+              <div key={d} style={{ textAlign: 'center', fontSize: 10, color: '#aab8c0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', padding: '4px 0' }}>{d}</div>
+            ))}
+          </div>
+
+          {/* Calendar grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+            {calDays().map((day, i) => {
+              if (!day) return <div key={i} />
+              const dayRoutes = routesForDay(day)
+              const holiday   = holidayForDay(day)
+              const today     = isToday(day)
+              return (
+                <div key={i}
+                  onClick={() => { if (dayRoutes.length > 0) setFilterStatus('all') }}
+                  style={{ minHeight: 64, padding: '6px 8px', borderRadius: 8, border: '0.5px solid ' + (today ? '#4A90C4' : '#f0f4f0'), background: today ? '#E6F1FB' : holiday ? '#FFF8E6' : '#fff', cursor: dayRoutes.length > 0 ? 'pointer' : 'default', position: 'relative' }}
+                  onMouseEnter={e => { if (dayRoutes.length > 0) (e.currentTarget as HTMLElement).style.background = '#f7f9f8' }}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = today ? '#E6F1FB' : holiday ? '#FFF8E6' : '#fff'}>
+                  <div style={{ fontSize: 12, fontWeight: today ? 700 : 400, color: today ? '#0C447C' : '#1a2530', marginBottom: 4 }}>{day}</div>
+                  {holiday && <div style={{ fontSize: 9, color: '#633806', lineHeight: 1.2, marginBottom: 3, fontWeight: 600 }}>{holiday.name}</div>}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {dayRoutes.slice(0, 2).map((r, ri) => {
+                      const sc = ROUTE_STATUS[r.status] || ROUTE_STATUS.draft
+                      return (
+                        <div key={ri} onClick={e => { e.stopPropagation(); openEdit(r) }}
+                          style={{ fontSize: 9, fontWeight: 600, padding: '2px 5px', borderRadius: 4, background: sc.bg, color: sc.color, cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {r.name}
+                        </div>
+                      )
+                    })}
+                    {dayRoutes.length > 2 && (
+                      <div style={{ fontSize: 9, color: '#aab8c0' }}>+{dayRoutes.length - 2} more</div>
+                    )}
+                  </div>
+                  {/* + button on hover */}
+                  <button onClick={e => { e.stopPropagation(); openNew(dateStr(day)) }}
+                    style={{ position: 'absolute', top: 4, right: 4, width: 16, height: 16, borderRadius: '50%', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 14, color: '#c8d8cc', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</button>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Legend */}
+          <div style={{ display: 'flex', gap: 16, marginTop: 14, paddingTop: 12, borderTop: '0.5px solid #f0f4f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: '#E6F1FB', border: '0.5px solid #4A90C4' }} />
+              <span style={{ fontSize: 10, color: '#6a7a8a' }}>Today</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: '#FFF8E6' }} />
+              <span style={{ fontSize: 10, color: '#6a7a8a' }}>Public holiday</span>
+            </div>
+            {Object.entries(ROUTE_STATUS).map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <div style={{ width: 10, height: 10, borderRadius: 2, background: v.bg }} />
+                <span style={{ fontSize: 10, color: '#6a7a8a' }}>{v.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── ROUTES LIST ───────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8a9aaa' }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🗺️</div>
             <div style={{ fontSize: 15, fontWeight: 500, color: '#1a2530', marginBottom: 6 }}>No routes planned yet</div>
             <div style={{ fontSize: 13, marginBottom: 20 }}>Use the AI planner to generate optimized delivery routes.</div>
-            <button onClick={openNew} className="btn-primary">+ Plan first route</button>
+            <button onClick={() => openNew()} className="btn-primary">+ Plan first route</button>
           </div>
         ) : filtered.map(r => {
           const sc  = ROUTE_STATUS[r.status] || ROUTE_STATUS.draft
           const drv = drivers.find(d => d.id === r.driver_id)
           const trk = trucks.find(t => t.id === r.truck_id)
+          const holiday = AU_HOLIDAYS[r.planned_date]
           return (
-            <div key={r.id} onClick={() => openEdit(r)}
-              style={{ display: 'flex', gap: 16, padding: '16px 20px', background: '#fff', borderRadius: 10, border: '0.5px solid #e8ede9', cursor: 'pointer' }}
+            <div key={r.id}
+              style={{ display: 'flex', gap: 16, padding: '16px 20px', background: '#fff', borderRadius: 10, border: '0.5px solid #e8ede9' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}>
               <div style={{ width: 44, height: 44, borderRadius: 10, background: sc.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -445,33 +795,43 @@ export default function RoutesPage() {
                 </svg>
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2530' }}>{r.name}</div>
                   <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 8, background: sc.bg, color: sc.color, fontWeight: 600 }}>{sc.label}</span>
+                  {holiday && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 8, background: '#FAEEDA', color: '#633806', fontWeight: 600 }}>⚠️ {holiday.name}</span>}
                 </div>
                 <div style={{ fontSize: 12, color: '#8a9aaa', marginBottom: 6 }}>
-                  {millName(r.feed_mill_id)} · {new Date(r.planned_date + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' })}
+                  {millName(r.feed_mill_id)} · {new Date(r.planned_date + 'T12:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
                   {r.stops?.length > 0 ? ' · ' + r.stops.length + ' farm' + (r.stops.length > 1 ? 's' : '') : ''}
-                  {r.total_km ? ' · ~' + r.total_km + ' km' : ''}
+                  {r.total_km ? ' · ~' + r.total_km + 'km' : ''}
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {drv && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: '#f0f4f0', color: '#6a7a8a' }}>👤 {drv.name}</span>}
                   {trk && <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, background: '#E6F1FB', color: '#0C447C' }}>🚛 {trk.plate || trk.name}</span>}
+                  {r.stops?.length > 0 && [...r.stops].sort((a: any, b: any) => a.order - b.order).map((stop: any, idx: number) => (
+                    <span key={idx} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: '#f7f9f8', color: '#8a9aaa', border: '0.5px solid #e8ede9' }}>
+                      {idx+1}. {stop.farm_name}
+                    </span>
+                  ))}
                 </div>
-                {r.stops?.length > 0 && (
-                  <div style={{ display: 'flex', gap: 4, marginTop: 8, flexWrap: 'wrap' }}>
-                    {r.stops.sort((a: any, b: any) => a.order - b.order).map((stop: any, idx: number) => (
-                      <span key={idx} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: '#f7f9f8', color: '#8a9aaa', border: '0.5px solid #e8ede9' }}>
-                        {idx+1}. {stop.farm_name}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: '#0C447C' }}>{r.total_km || '—'}</div>
-                <div style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase' }}>km</div>
-                <div style={{ fontSize: 12, color: '#4CAF7D', fontWeight: 600, marginTop: 8 }}>Edit →</div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#0C447C' }}>{r.total_km || '—'}</div>
+                  <div style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase' }}>km</div>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {r.stops?.length > 0 && (
+                    <button onClick={() => setMapModal(r)}
+                      style={{ fontSize: 11, padding: '5px 10px', borderRadius: 6, border: '0.5px solid #4A90C4', background: '#E6F1FB', color: '#0C447C', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                      🗺️ Map
+                    </button>
+                  )}
+                  <button onClick={() => openEdit(r)}
+                    style={{ fontSize: 11, padding: '5px 10px', borderRadius: 6, border: '0.5px solid #4CAF7D', background: '#eaf5ee', color: '#27500A', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                    Edit
+                  </button>
+                </div>
               </div>
             </div>
           )
