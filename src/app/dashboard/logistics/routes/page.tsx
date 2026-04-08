@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useFarm } from '@/app/dashboard/FarmContext'
 
 interface FeedMill { id: string; name: string; location: string | null; lat: number | null; lng: number | null }
 interface Farm     { id: string; name: string; location: string | null; lat: number | null; lng: number | null }
@@ -140,6 +141,7 @@ function NavButtons({ mill, stops, farms }: { mill: FeedMill; stops: any[]; farm
 }
 
 export default function RoutesPage() {
+  const { selectedMillId } = useFarm()
   const [feedMills,    setFeedMills]    = useState<FeedMill[]>([])
   const [farms,        setFarms]        = useState<Farm[]>([])
   const [silos,        setSilos]        = useState<Silo[]>([])
@@ -346,9 +348,12 @@ export default function RoutesPage() {
   }
 
   const isEdit   = drawer && drawer!=='new'
-  const filtered = filterStatus==='all' ? routes : routes.filter(r=>r.status===filterStatus)
-  const counts   = Object.keys(ROUTE_STATUS).reduce((acc,k)=>{ acc[k]=routes.filter(r=>r.status===k).length; return acc },{} as Record<string,number>)
-
+  const filtered = routes.filter(r => {
+  const matchMill   = !selectedMillId || r.feed_mill_id === selectedMillId
+  const matchStatus = filterStatus === 'all' || r.status === filterStatus
+  return matchMill && matchStatus
+})
+  
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:300, color:'#8a9aaa', fontSize:14 }}>
       <div style={{ textAlign:'center' }}>
