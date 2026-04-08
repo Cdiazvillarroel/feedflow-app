@@ -1,15 +1,17 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useFarm } from '@/app/dashboard/FarmContext'
 
-interface Farm     { id: string; name: string; location: string | null; lat: number | null; lng: number | null }
+interface Farm     { id: string; name: string; location: string | null; lat: number | null; lng: number | null; feed_mill_id: string | null }
 interface Silo     { id: string; farm_id: string; name: string; material: string | null; capacity_kg: number; qr_token: string | null }
 interface SiloStat { silo_id: string; level_pct: number; kg_remaining: number; alert_level: string }
 interface DeliveryOrder { id: string; farm_id: string; feed_mill_id: string; status: string; scheduled_at: string | null }
 interface FeedMill { id: string; name: string }
 
 export default function FarmMonitorPage() {
-  const [farms,     setFarms]     = useState<Farm[]>([])
+  const { farms: contextFarms } = useFarm()
+
   const [silos,     setSilos]     = useState<Silo[]>([])
   const [siloStats, setSiloStats] = useState<SiloStat[]>([])
   const [orders,    setOrders]    = useState<DeliveryOrder[]>([])
@@ -19,18 +21,19 @@ export default function FarmMonitorPage() {
   const [filter,    setFilter]    = useState<'all' | 'critical' | 'low' | 'ok'>('all')
   const [selected,  setSelected]  = useState<Farm | null>(null)
 
+  // Use farms from context (already filtered by mill via sidebar)
+  const farms = contextFarms as Farm[]
+
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
     setLoading(true)
-    const [farmsR, silosR, statsR, ordersR, millsR] = await Promise.all([
-      supabase.from('farms').select('*').order('name'),
+    const [silosR, statsR, ordersR, millsR] = await Promise.all([
       supabase.from('silos').select('*').order('name'),
       supabase.from('silo_latest_readings').select('*'),
       supabase.from('delivery_orders').select('id, farm_id, feed_mill_id, status, scheduled_at').order('created_at', { ascending: false }),
       supabase.from('feed_mills').select('id, name'),
     ])
-    setFarms(farmsR.data || [])
     setSilos(silosR.data || [])
     setSiloStats(statsR.data || [])
     setOrders(ordersR.data || [])
@@ -91,7 +94,6 @@ export default function FarmMonitorPage() {
 
   return (
     <>
-      {/* FARM DETAIL DRAWER */}
       {selected && (
         <>
           <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }} />
@@ -100,7 +102,6 @@ export default function FarmMonitorPage() {
               const { fs, stats, minDays, alertLevel, totalKg, totalCap, pendingOrder } = getFarmData(selected)
               return (
                 <>
-                  {/* Drawer header */}
                   <div style={{ background: '#1a2530', padding: '24px', display: 'flex', alignItems: 'flex-start', gap: 14 }}>
                     <div style={{ width: 44, height: 44, borderRadius: '50%', background: urgBg(alertLevel), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: urgText(alertLevel), flexShrink: 0 }}>
                       {selected.name.charAt(0)}
@@ -133,12 +134,9 @@ export default function FarmMonitorPage() {
                     <button onClick={() => setSelected(null)} style={{ width: 28, height: 28, borderRadius: '50%', border: '0.5px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', cursor: 'pointer', fontSize: 14, color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
                   </div>
 
-                  {/* Pending order banner */}
                   {pendingOrder && (
                     <div style={{ background: '#FAEEDA', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '0.5px solid #f0d0a0' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#633806" strokeWidth="1.8" strokeLinecap="round">
-                        <path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8z"/>
-                      </svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#633806" strokeWidth="1.8" strokeLinecap="round"><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7V8z"/></svg>
                       <span style={{ fontSize: 12, color: '#633806', fontWeight: 600 }}>
                         {pendingOrder.status === 'in_transit' ? 'Delivery in transit' : 'Delivery scheduled'} — {millName(pendingOrder.feed_mill_id)}
                         {pendingOrder.scheduled_at ? ' · ' + new Date(pendingOrder.scheduled_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' }) : ''}
@@ -146,7 +144,6 @@ export default function FarmMonitorPage() {
                     </div>
                   )}
 
-                  {/* Silos */}
                   <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14 }}>Silo status</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -188,8 +185,7 @@ export default function FarmMonitorPage() {
                             {silo.qr_token && (
                               <div style={{ marginTop: 12, paddingTop: 12, borderTop: '0.5px solid #e8ede9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <span style={{ fontSize: 11, color: '#aab8c0' }}>QR delivery scan</span>
-                                <button
-                                  onClick={() => { navigator.clipboard.writeText(window.location.origin + '/confirm/' + silo.qr_token); }}
+                                <button onClick={() => navigator.clipboard.writeText(window.location.origin + '/confirm/' + silo.qr_token)}
                                   style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '0.5px solid #c8d8cc', background: '#fff', cursor: 'pointer', color: '#4A90C4', fontFamily: 'inherit' }}>
                                   Copy QR link
                                 </button>
@@ -198,12 +194,9 @@ export default function FarmMonitorPage() {
                           </div>
                         )
                       })}
-                      {fs.length === 0 && (
-                        <div style={{ textAlign: 'center', padding: '30px 0', color: '#aab8c0', fontSize: 13 }}>No silos registered for this farm</div>
-                      )}
+                      {fs.length === 0 && <div style={{ textAlign: 'center', padding: '30px 0', color: '#aab8c0', fontSize: 13 }}>No silos registered for this farm</div>}
                     </div>
 
-                    {/* Order history */}
                     <div style={{ marginTop: 24 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>Recent orders</div>
                       {orders.filter(o => o.farm_id === selected.id).slice(0, 4).map(o => {
@@ -229,7 +222,6 @@ export default function FarmMonitorPage() {
                     </div>
                   </div>
 
-                  {/* Footer */}
                   <div style={{ padding: '16px 24px', borderTop: '0.5px solid #e8ede9' }}>
                     <a href="/dashboard/logistics/orders" style={{ display: 'block', width: '100%', padding: '11px', background: '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'center', textDecoration: 'none' }}>
                       + Create delivery order for this farm
@@ -242,7 +234,6 @@ export default function FarmMonitorPage() {
         </>
       )}
 
-      {/* HEADER */}
       <div className="page-header">
         <div>
           <div className="page-title">Farm Monitor</div>
@@ -250,7 +241,6 @@ export default function FarmMonitorPage() {
         </div>
       </div>
 
-      {/* SUMMARY CARDS */}
       <div className="summary-row">
         <div className="sum-card" onClick={() => setFilter('all')} style={{ cursor: 'pointer', borderBottom: filter === 'all' ? '2px solid #4A90C4' : '2px solid transparent' }}>
           <div className="sum-label">All farms</div>
@@ -274,7 +264,6 @@ export default function FarmMonitorPage() {
         </div>
       </div>
 
-      {/* SEARCH */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '0.5px solid #c8d8cc', borderRadius: 8, padding: '0 12px', marginBottom: 16, maxWidth: 340 }}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#aab8c0" strokeWidth="1.5">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -283,33 +272,26 @@ export default function FarmMonitorPage() {
           style={{ border: 'none', outline: 'none', fontSize: 13, color: '#1a2530', background: 'transparent', width: '100%', padding: '9px 0' }} />
       </div>
 
-      {/* TABLE HEADER */}
       <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr 80px 80px 100px 120px 110px', gap: 12, padding: '0 16px 10px' }}>
         {['Farm', 'Feed level', 'Min days', 'Silos', 'Available', 'Status', 'Action'].map(h => (
           <div key={h} style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>{h}</div>
         ))}
       </div>
 
-      {/* FARM ROWS */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {farmList.map(({ farm, minDays, alertLevel, totalKg, totalCap, siloCount, pendingOrder }) => {
-          const uc   = urgColor(alertLevel)
-          const dc   = daysColor(minDays)
-          const pct  = totalCap > 0 ? Math.round((totalKg / totalCap) * 100) : 0
+          const uc  = urgColor(alertLevel)
+          const dc  = daysColor(minDays)
+          const pct = totalCap > 0 ? Math.round((totalKg / totalCap) * 100) : 0
           return (
-            <div key={farm.id}
-              onClick={() => setSelected(farm)}
+            <div key={farm.id} onClick={() => setSelected(farm)}
               style={{ display: 'grid', gridTemplateColumns: '200px 1fr 80px 80px 100px 120px 110px', gap: 12, alignItems: 'center', padding: '14px 16px', background: '#fff', borderRadius: 10, border: '0.5px solid #e8ede9', borderLeft: '3px solid ' + uc, cursor: 'pointer' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}>
-
-              {/* Farm name */}
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{farm.name}</div>
                 <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>{farm.location || '—'}</div>
               </div>
-
-              {/* Feed level bar */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: uc }}>{pct}%</span>
@@ -319,20 +301,12 @@ export default function FarmMonitorPage() {
                   <div style={{ height: '100%', borderRadius: 3, background: uc, width: pct + '%' }} />
                 </div>
               </div>
-
-              {/* Min days */}
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 20, fontWeight: 700, color: dc }}>{minDays < 999 ? minDays : '—'}</div>
                 <div style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase' }}>days</div>
               </div>
-
-              {/* Silo count */}
               <div style={{ textAlign: 'center', fontSize: 14, fontWeight: 600, color: '#1a2530' }}>{siloCount}</div>
-
-              {/* Available kg */}
               <div style={{ fontSize: 12, fontWeight: 500, color: '#1a2530' }}>{(totalKg/1000).toFixed(1)} t</div>
-
-              {/* Status badge */}
               <div>
                 {pendingOrder ? (
                   <span style={{ fontSize: 10, padding: '3px 8px', borderRadius: 8, background: pendingOrder.status === 'in_transit' ? '#eaf5ee' : '#E6F1FB', color: pendingOrder.status === 'in_transit' ? '#27500A' : '#0C447C', fontWeight: 600, display: 'inline-block' }}>
@@ -344,8 +318,6 @@ export default function FarmMonitorPage() {
                   </span>
                 )}
               </div>
-
-              {/* Action */}
               <div onClick={e => e.stopPropagation()}>
                 <a href="/dashboard/logistics/orders"
                   style={{ fontSize: 11, padding: '5px 10px', borderRadius: 6, border: '0.5px solid #4CAF7D', background: '#eaf5ee', color: '#27500A', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
@@ -355,7 +327,6 @@ export default function FarmMonitorPage() {
             </div>
           )
         })}
-
         {farmList.length === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8a9aaa' }}>
             <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
