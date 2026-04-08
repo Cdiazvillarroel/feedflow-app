@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useFarm } from '@/app/dashboard/FarmContext'
 
 interface FeedMill { id: string; name: string }
 interface Driver   { id: string; feed_mill_id: string; name: string; license: string | null; phone: string | null; email: string | null; truck_id: string | null; active: boolean; created_at: string }
@@ -15,6 +16,7 @@ function lStyle(): React.CSSProperties {
 }
 
 export default function DriversPage() {
+  const { selectedMillId } = useFarm()
   const [feedMills, setFeedMills] = useState<FeedMill[]>([])
   const [drivers,   setDrivers]   = useState<Driver[]>([])
   const [trucks,    setTrucks]    = useState<Truck[]>([])
@@ -315,7 +317,7 @@ export default function DriversPage() {
               <div style={{ fontSize: 15, fontWeight: 500, color: '#1a2530', marginBottom: 6 }}>No drivers yet</div>
               <button onClick={openNewDriver} className="btn-primary">+ Add first driver</button>
             </div>
-          ) : drivers.map(d => {
+          ) : drivers.filter(d => !selectedMillId || d.feed_mill_id === selectedMillId).map(d => {  
             const trk          = trucks.find(t => t.id === d.truck_id)
             const driverRoutes = routes.filter(r => r.driver_id === d.id && r.status !== 'completed')
             return (
@@ -365,7 +367,7 @@ export default function DriversPage() {
               <div style={{ fontSize: 15, fontWeight: 500, color: '#1a2530', marginBottom: 6 }}>No trucks yet</div>
               <button onClick={openNewTruck} style={{ background: '#4A90C4' }} className="btn-primary">+ Add first truck</button>
             </div>
-          ) : trucks.map(t => {
+          ) : trucks.filter(t => !selectedMillId || t.feed_mill_id === selectedMillId).map(t => {
             const assignedDriver = drivers.find(d => d.truck_id === t.id)
             const truckRoutes    = routes.filter(r => r.truck_id === t.id && r.status !== 'completed')
             return (
