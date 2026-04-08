@@ -156,9 +156,10 @@ export default function OrdersPage() {
   const isEdit = drawer && drawer !== 'new'
 
   const filtered = orders.filter(o => {
-    const matchStatus = filterStatus === 'all' || o.status === filterStatus
-    const matchSearch = !search || farmName(o.farm_id).toLowerCase().includes(search.toLowerCase()) || millName(o.feed_mill_id).toLowerCase().includes(search.toLowerCase())
-    return matchStatus && matchSearch
+  const matchMill   = !selectedMillId || o.feed_mill_id === selectedMillId
+  const matchStatus = filterStatus === 'all' || o.status === filterStatus
+  const matchSearch = !search || farmName(o.farm_id).toLowerCase().includes(search.toLowerCase()) || millName(o.feed_mill_id).toLowerCase().includes(search.toLowerCase())
+  return matchMill && matchStatus && matchSearch
   })
 
   const counts = Object.keys(STATUS_COLORS).reduce((acc, k) => {
