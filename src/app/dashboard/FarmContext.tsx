@@ -11,19 +11,22 @@ interface Farm {
   feed_mill_id: string | null
 }
 interface FarmContextType {
-  farms:          Farm[]
-  currentFarm:    Farm | null
-  setCurrentFarm: (farm: Farm) => void
-  loading:        boolean
+  farms:             Farm[]
+  currentFarm:       Farm | null
+  setCurrentFarm:    (farm: Farm) => void
+  selectedMillId:    string
+  setSelectedMillId: (id: string) => void
+  loading:           boolean
 }
 const FarmContext = createContext<FarmContextType>({
-  farms: [], currentFarm: null, setCurrentFarm: () => {}, loading: true,
+  farms: [], currentFarm: null, setCurrentFarm: () => {}, selectedMillId: '', setSelectedMillId: () => {}, loading: true,
 })
 
 export function FarmProvider({ children }: { children: React.ReactNode }) {
-  const [farms,       setFarms]            = useState<Farm[]>([])
-  const [currentFarm, setCurrentFarmState] = useState<Farm | null>(null)
-  const [loading,     setLoading]          = useState(true)
+  const [allFarms,       setAllFarms]       = useState<Farm[]>([])
+  const [currentFarm,    setCurrentFarmState] = useState<Farm | null>(null)
+  const [selectedMillId, setSelectedMillId]   = useState<string>('')
+  const [loading,        setLoading]          = useState(true)
 
   useEffect(() => {
     async function loadFarms() {
@@ -34,17 +37,13 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
           .from('user_farms')
           .select('farms(id, name, location, lat, lng, feed_mill_id)')
           .eq('user_id', user.id)
-        if (!error && data) {
-          farmList = data.map((row: any) => row.farms).filter(Boolean)
-        }
+        if (!error && data) farmList = data.map((row: any) => row.farms).filter(Boolean)
       } else {
         const { data, error } = await supabase
-          .from('farms')
-          .select('id, name, location, lat, lng, feed_mill_id')
-          .order('name')
+          .from('farms').select('id, name, location, lat, lng, feed_mill_id').order('name')
         if (!error && data) farmList = data
       }
-      setFarms(farmList)
+      setAllFarms(farmList)
       const saved     = typeof window !== 'undefined' ? localStorage.getItem('feedflow_farm_id') : null
       const savedFarm = saved ? farmList.find(f => f.id === saved) : null
       setCurrentFarmState(savedFarm || farmList[0] || null)
@@ -53,6 +52,11 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
     loadFarms()
   }, [])
 
+  // Farms filtered by selected mill
+  const farms = selectedMillId
+    ? allFarms.filter(f => f.feed_mill_id === selectedMillId)
+    : allFarms
+
   function setCurrentFarm(farm: Farm) {
     setCurrentFarmState(farm)
     if (typeof window !== 'undefined') localStorage.setItem('feedflow_farm_id', farm.id)
@@ -60,7 +64,7 @@ export function FarmProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <FarmContext.Provider value={{ farms, currentFarm, setCurrentFarm, loading }}>
+    <FarmContext.Provider value={{ farms, currentFarm, setCurrentFarm, selectedMillId, setSelectedMillId, loading }}>
       {children}
     </FarmContext.Provider>
   )
