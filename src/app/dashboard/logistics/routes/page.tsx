@@ -223,7 +223,7 @@ export default function RoutesPage() {
     const y = calMonth.getFullYear(), m = String(calMonth.getMonth()+1).padStart(2,'0'), d = String(day).padStart(2,'0')
     return `${y}-${m}-${d}`
   }
-  const routesForDay  = (day: number) => routes.filter(r => r.planned_date === dateStr(day))
+  const routesForDay  = (day: number) => filtered.filter(r => r.planned_date === dateStr(day))
   const holidayForDay = (day: number) => AU_HOLIDAYS[dateStr(day)]
   const isToday = (day: number) => { const t = new Date(); return t.getFullYear()===calMonth.getFullYear() && t.getMonth()===calMonth.getMonth() && t.getDate()===day }
 
