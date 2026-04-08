@@ -10,7 +10,7 @@ interface FeedMill { id: string; name: string }
 const navItems = [
   { section: 'Monitor' },
   { href: '/dashboard',           label: 'Dashboard',   icon: 'grid' },
-  { href: '/dashboard/alerts',    label: 'Alerts',      icon: 'bell',  badge: true },
+  { href: '/dashboard/alerts',    label: 'Alerts',      icon: 'bell', badge: true },
   { href: '/dashboard/analytics', label: 'Analytics',   icon: 'activity' },
   { href: '/dashboard/insights',  label: 'AI Insights', icon: 'ai' },
   { href: '/dashboard/map',       label: 'Map view',    icon: 'map' },
@@ -61,18 +61,12 @@ export default function SidebarNav() {
       .then(({ count }) => setAlertCount(count || 0))
   }, [])
 
-  // Filter farms by selected mill using feed_mill_id column
   const filteredFarms = selectedMillId
     ? (farms as any[]).filter(f => f.feed_mill_id === selectedMillId)
     : farms
 
-  // If current farm is not in filtered list, reset it
-    useEffect(() => {
-  if (selectedMillId && currentFarm) {
-    const stillValid = filteredFarms.find(f => f.id === currentFarm.id)
-    if (!stillValid && filteredFarms.length > 0) setCurrentFarm(filteredFarms[0])
-  }
-}, [selectedMillId])
+  useEffect(() => {
+    if (selectedMillId && currentFarm) {
       const stillValid = filteredFarms.find(f => f.id === currentFarm.id)
       if (!stillValid && filteredFarms.length > 0) setCurrentFarm(filteredFarms[0])
     }
@@ -116,7 +110,6 @@ export default function SidebarNav() {
         })}
       </div>
 
-      {/* Sign out */}
       <div style={{ padding: '8px 10px', borderTop: '0.5px solid #e5e7eb' }}>
         <button onClick={handleLogout}
           style={{ width: '100%', padding: '8px 12px', background: 'transparent', border: '0.5px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#6a7a8a', fontFamily: 'inherit' }}>
@@ -127,19 +120,14 @@ export default function SidebarNav() {
         </button>
       </div>
 
-      {/* Mill + Farm selectors */}
       <div style={{ margin: '8px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
 
-        {/* Mill selector */}
         <div>
           <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Feed mill</p>
           <div style={{ position: 'relative' }}>
             <select
               value={selectedMillId}
-              onChange={e => {
-                setSelectedMillId(e.target.value)
-                setDropdownOpen(false)
-              }}
+              onChange={e => { setSelectedMillId(e.target.value); setDropdownOpen(false) }}
               style={{ width: '100%', padding: '8px 28px 8px 10px', background: '#f9fafb', border: '1px solid ' + (selectedMillId ? '#4A90C4' : '#e5e7eb'), borderRadius: 7, fontSize: 12, color: '#111827', fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}>
               <option value="">All mills ({farms.length})</option>
               {feedMills.map(m => {
@@ -160,7 +148,6 @@ export default function SidebarNav() {
           )}
         </div>
 
-        {/* Farm selector */}
         <div style={{ position: 'relative' }}>
           <button onClick={() => setDropdownOpen(prev => !prev)}
             style={{ width: '100%', padding: '10px 12px', background: '#f9fafb', border: '1px solid ' + (dropdownOpen ? '#4CAF7D' : '#e5e7eb'), borderRadius: 8, cursor: 'pointer', textAlign: 'left' }}>
@@ -187,7 +174,7 @@ export default function SidebarNav() {
               <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 -8px 24px rgba(0,0,0,0.10)', overflow: 'hidden', zIndex: 100, maxHeight: 320, overflowY: 'auto' }}>
                 <div style={{ padding: '8px 12px 6px', borderBottom: '0.5px solid #f0f4f0', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                   <span style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600 }}>
-                    {filteredFarms.length} farm{filteredFarms.length !== 1 ? 's' : ''} {selectedMillId ? '— filtered by mill' : ''}
+                    {filteredFarms.length} farm{filteredFarms.length !== 1 ? 's' : ''}{selectedMillId ? ' — filtered' : ''}
                   </span>
                 </div>
                 {loading ? (
