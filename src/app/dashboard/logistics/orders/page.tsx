@@ -70,7 +70,7 @@ export default function OrdersPage() {
       supabase.from('silo_latest_readings').select('*'),
       supabase.from('drivers').select('id, name, feed_mill_id').order('name'),
       supabase.from('trucks').select('id, name, plate, capacity_kg, feed_mill_id').order('name'),
-      supabase.from('delivery_orders').select('*').order('created_at', { ascending: false }).then(r => selectedMillId ? { ...r, data: (r.data || []).filter((o: any) => o.feed_mill_id === selectedMillId) } : r),
+      supabase.from('delivery_orders').select('*').order('created_at', { ascending: false }),
       supabase.from('delivery_order_items').select('*'),
     ])
     setFeedMills(fmR.data || [])
