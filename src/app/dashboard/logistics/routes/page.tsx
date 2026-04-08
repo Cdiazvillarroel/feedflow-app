@@ -353,7 +353,7 @@ export default function RoutesPage() {
   const matchStatus = filterStatus === 'all' || r.status === filterStatus
   return matchMill && matchStatus
 })
-  
+  const counts = Object.keys(ROUTE_STATUS).reduce((acc,k)=>{ acc[k]=filtered.filter(r=>r.status===k).length; return acc },{} as Record<string,number>)
   if (loading) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:300, color:'#8a9aaa', fontSize:14 }}>
       <div style={{ textAlign:'center' }}>
