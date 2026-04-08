@@ -74,7 +74,11 @@ function buildGoogleMapsUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
 
 function buildWazeUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
   const sorted = [...stops].sort((a, b) => a.order - b.order)
-  if (sorted.length === 0) return null
+  if (sorted.length === 0) {
+    if (mill.lat && mill.lng) return `https://waze.com/ul?ll=${mill.lat},${mill.lng}&navigate=yes`
+    if (mill.location) return `https://waze.com/ul?q=${encodeURIComponent(mill.location)}&navigate=yes`
+    return null
+  }
   const first = sorted[0]
   const farm  = farms.find(f => f.id === first.farm_id)
   if (farm?.lat && farm?.lng) return `https://waze.com/ul?ll=${farm.lat},${farm.lng}&navigate=yes`
@@ -83,9 +87,9 @@ function buildWazeUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
 }
 
 function buildAppleMapsUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
-  const sorted = [...stops].sort((a, b) => a.order - b.order)
-  if (sorted.length === 0) return null
   const origin = mill.lat && mill.lng ? `${mill.lat},${mill.lng}` : encodeURIComponent(mill.location || mill.name)
+  const sorted = [...stops].sort((a, b) => a.order - b.order)
+  if (sorted.length === 0) return `https://maps.apple.com/?q=${encodeURIComponent(mill.location || mill.name)}`
   const last   = sorted[sorted.length - 1]
   const farm   = farms.find(f => f.id === last.farm_id)
   const dest   = farm?.lat && farm?.lng ? `${farm.lat},${farm.lng}` : encodeURIComponent(last.location || last.farm_name)
@@ -97,8 +101,8 @@ function buildGoogleMapsEmbedUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
   if (!key || stops.length === 0) return null
   const sorted = [...stops].sort((a, b) => a.order - b.order)
   const origin = mill.lat && mill.lng ? `${mill.lat},${mill.lng}` : encodeURIComponent(mill.location || mill.name)
-  const last   = sorted[sorted.length - 1]
   const getFarm = (s: any) => { const f = farms.find(f => f.id === s.farm_id); return f?.lat && f?.lng ? `${f.lat},${f.lng}` : encodeURIComponent(s.location || s.farm_name) }
+  const last   = sorted[sorted.length - 1]
   const dest   = getFarm(last)
   const wps    = sorted.slice(0, -1).map(getFarm).join('|')
   let url = `https://www.google.com/maps/embed/v1/directions?key=${key}&origin=${origin}&destination=${dest}&mode=driving`
@@ -111,23 +115,23 @@ function NavButtons({ mill, stops, farms }: { mill: FeedMill; stops: any[]; farm
   const wazeUrl  = buildWazeUrl(mill, stops, farms)
   const appleUrl = buildAppleMapsUrl(mill, stops, farms)
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       <a href={gmUrl} target="_blank" rel="noopener noreferrer"
-        style={{ fontSize: 12, padding: '7px 12px', borderRadius: 7, background: '#4A90C4', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+        style={{ fontSize: 11, padding: '5px 10px', borderRadius: 6, background: '#4A90C4', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
         Google Maps
       </a>
       {wazeUrl && (
         <a href={wazeUrl} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: 12, padding: '7px 12px', borderRadius: 7, background: '#06CCFF', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+          style={{ fontSize: 11, padding: '5px 10px', borderRadius: 6, background: '#06CCFF', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
           Waze
         </a>
       )}
       {appleUrl && (
         <a href={appleUrl} target="_blank" rel="noopener noreferrer"
-          style={{ fontSize: 12, padding: '7px 12px', borderRadius: 7, background: '#1a2530', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 5 }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/></svg>
+          style={{ fontSize: 11, padding: '5px 10px', borderRadius: 6, background: '#1a2530', color: '#fff', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/></svg>
           Apple Maps
         </a>
       )}
@@ -160,6 +164,8 @@ export default function RoutesPage() {
   const [routeStops,      setRouteStops]      = useState<any[]>([])
   const [selectedFarmIds, setSelectedFarmIds] = useState<string[]>([])
 
+  const emptyMill: FeedMill = { id: '', name: '', location: null, lat: null, lng: null }
+
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
@@ -186,8 +192,6 @@ export default function RoutesPage() {
   function showMsg(t: string) { setMsg(t); setTimeout(() => setMsg(''), 4000) }
 
   const millName   = (id: string) => feedMills.find(m => m.id === id)?.name || '—'
-  const driverName = (id: string | null) => id ? drivers.find(d => d.id === id)?.name || '—' : '—'
-  const truckName  = (id: string | null) => id ? trucks.find(t => t.id === id)?.name || '—' : '—'
   const getStat    = (id: string) => siloStats.find(s => s.silo_id === id)
   const getDays    = (siloId: string) => {
     const stat = getStat(siloId); const silo = silos.find(s => s.id === siloId)
@@ -354,8 +358,6 @@ export default function RoutesPage() {
     </div>
   )
 
-  const emptyMill: FeedMill = { id:'', name:'', location:null, lat:null, lng:null }
-
   return (
     <>
       {/* MAP MODAL */}
@@ -363,13 +365,13 @@ export default function RoutesPage() {
         <>
           <div onClick={()=>setMapModal(null)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:300 }} />
           <div style={{ position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:'90vw', maxWidth:900, height:'80vh', background:'#fff', zIndex:301, borderRadius:16, overflow:'hidden', boxShadow:'0 20px 60px rgba(0,0,0,0.3)', display:'flex', flexDirection:'column' }}>
-            <div style={{ padding:'16px 20px', borderBottom:'0.5px solid #e8ede9', display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ flex:1 }}>
+            <div style={{ padding:'16px 20px', borderBottom:'0.5px solid #e8ede9', display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+              <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontSize:14, fontWeight:600, color:'#1a2530' }}>{mapModal.name}</div>
                 <div style={{ fontSize:11, color:'#aab8c0', marginTop:2 }}>{millName(mapModal.feed_mill_id)} · {new Date(mapModal.planned_date+'T12:00:00').toLocaleDateString('en-AU',{weekday:'long',day:'numeric',month:'long'})} · {mapModal.stops?.length||0} stops</div>
               </div>
               <NavButtons mill={feedMills.find(m=>m.id===mapModal.feed_mill_id)||emptyMill} stops={mapModal.stops||[]} farms={farms} />
-              <button onClick={()=>setMapModal(null)} style={{ width:30, height:30, borderRadius:'50%', border:'0.5px solid #e8ede9', background:'#f7f9f8', cursor:'pointer', fontSize:16, color:'#8a9aaa', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+              <button onClick={()=>setMapModal(null)} style={{ width:30, height:30, borderRadius:'50%', border:'0.5px solid #e8ede9', background:'#f7f9f8', cursor:'pointer', fontSize:16, color:'#8a9aaa', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>✕</button>
             </div>
             {(() => {
               const mill     = feedMills.find(m=>m.id===mapModal.feed_mill_id)
@@ -377,27 +379,31 @@ export default function RoutesPage() {
               return embedUrl ? (
                 <iframe src={embedUrl} style={{ flex:1, border:'none' }} allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade" />
               ) : (
-                <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, color:'#8a9aaa' }}>
+                <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16, color:'#8a9aaa', padding:24 }}>
                   <div style={{ fontSize:40 }}>🗺️</div>
                   <div style={{ fontSize:14, color:'#1a2530', fontWeight:500 }}>Embedded map unavailable</div>
-                  <div style={{ fontSize:12, color:'#aab8c0', textAlign:'center', maxWidth:320 }}>Add <code style={{ background:'#f0f4f0', padding:'2px 6px', borderRadius:4 }}>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to Vercel to enable the embedded map.</div>
+                  <div style={{ fontSize:12, color:'#aab8c0', textAlign:'center', maxWidth:360 }}>
+                    Add <code style={{ background:'#f0f4f0', padding:'2px 6px', borderRadius:4 }}>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to Vercel to enable the embedded map.
+                  </div>
                   <NavButtons mill={mill||emptyMill} stops={mapModal.stops||[]} farms={farms} />
                 </div>
               )
             })()}
-            <div style={{ padding:'12px 20px', borderTop:'0.5px solid #e8ede9', display:'flex', gap:8, overflowX:'auto' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-                <div style={{ width:28, height:28, borderRadius:'50%', background:'#1a2530', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:'#fff' }}>S</div>
-                <span style={{ fontSize:11, color:'#6a7a8a', maxWidth:100, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{feedMills.find(m=>m.id===mapModal.feed_mill_id)?.name}</span>
-              </div>
-              {[...(mapModal.stops||[])].sort((a,b)=>a.order-b.order).map((stop,idx) => (
-                <div key={idx} style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-                  <div style={{ color:'#aab8c0', fontSize:16 }}>→</div>
-                  <div style={{ width:28, height:28, borderRadius:'50%', background:stop.alert_level==='critical'?'#E24B4A':stop.alert_level==='low'?'#EF9F27':'#4CAF7D', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff' }}>{idx+1}</div>
-                  <span style={{ fontSize:11, color:'#1a2530', maxWidth:120, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight:500 }}>{stop.farm_name}</span>
+            {mapModal.stops?.length > 0 && (
+              <div style={{ padding:'12px 20px', borderTop:'0.5px solid #e8ede9', display:'flex', gap:8, overflowX:'auto' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                  <div style={{ width:28, height:28, borderRadius:'50%', background:'#1a2530', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, fontWeight:700, color:'#fff' }}>S</div>
+                  <span style={{ fontSize:11, color:'#6a7a8a', maxWidth:100, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{feedMills.find(m=>m.id===mapModal.feed_mill_id)?.name}</span>
                 </div>
-              ))}
-            </div>
+                {[...(mapModal.stops||[])].sort((a,b)=>a.order-b.order).map((stop,idx) => (
+                  <div key={idx} style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                    <div style={{ color:'#aab8c0', fontSize:16 }}>→</div>
+                    <div style={{ width:28, height:28, borderRadius:'50%', background:stop.alert_level==='critical'?'#E24B4A':stop.alert_level==='low'?'#EF9F27':'#4CAF7D', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff' }}>{idx+1}</div>
+                    <span style={{ fontSize:11, color:'#1a2530', maxWidth:120, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', fontWeight:500 }}>{stop.farm_name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -465,9 +471,17 @@ export default function RoutesPage() {
                 </div>
               </div>
 
+              {/* Navigation buttons always visible in drawer */}
+              {form.feed_mill_id && (
+                <div style={{ background:'#f7f9f8', borderRadius:8, padding:'12px 14px' }}>
+                  <div style={{ fontSize:10, fontWeight:700, color:'#6a7a8a', textTransform:'uppercase', letterSpacing:'0.4px', marginBottom:8 }}>Navigate</div>
+                  <NavButtons mill={feedMills.find(m=>m.id===form.feed_mill_id)||emptyMill} stops={routeStops} farms={farms} />
+                </div>
+              )}
+
               <SecTitle title="✦ AI Route Planner" />
               <div style={{ background:'#f7f9f8', borderRadius:12, padding:'16px' }}>
-                <div style={{ fontSize:12, color:'#6a7a8a', marginBottom:12, lineHeight:1.6 }}>Select farms · AI optimizes by urgency, distance and load · Review before approving</div>
+                <div style={{ fontSize:12, color:'#6a7a8a', marginBottom:12, lineHeight:1.6 }}>Select farms · AI optimizes by urgency, distance and load · Review before approving · Navigation is always available</div>
                 <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:14, maxHeight:240, overflowY:'auto' }}>
                   {farmUrgency.map(({ farm, minDays, alertLevel, totalKgNeeded }) => {
                     const checked  = selectedFarmIds.includes(farm.id)
@@ -525,12 +539,10 @@ export default function RoutesPage() {
                 <>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                     <div style={{ fontSize:11, fontWeight:700, color:'#1a2530', textTransform:'uppercase', letterSpacing:'0.5px' }}>Route stops — {routeStops.length} farms</div>
-                    {isEdit && (
-                      <button onClick={()=>setMapModal(drawer as DeliveryRoute)}
-                        style={{ fontSize:11, padding:'4px 12px', borderRadius:6, border:'0.5px solid #4A90C4', background:'#E6F1FB', color:'#0C447C', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>
-                        🗺️ View on map
-                      </button>
-                    )}
+                    <button onClick={()=>setMapModal(drawer as DeliveryRoute)}
+                      style={{ fontSize:11, padding:'4px 12px', borderRadius:6, border:'0.5px solid #4A90C4', background:'#E6F1FB', color:'#0C447C', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>
+                      🗺️ View on map
+                    </button>
                   </div>
                   {aiReasoning && !aiResult && (
                     <div style={{ background:'#f7f9f8', borderRadius:8, padding:'10px 14px', fontSize:12, color:'#6a7a8a', lineHeight:1.5, borderLeft:'3px solid #4CAF7D' }}>
@@ -711,8 +723,8 @@ export default function RoutesPage() {
                   {r.stops?.length>0 && (
                     <button onClick={()=>setMapModal(r)} style={{ fontSize:11, padding:'5px 10px', borderRadius:6, border:'0.5px solid #4A90C4', background:'#E6F1FB', color:'#0C447C', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>🗺️ Map</button>
                   )}
-                  {r.stops?.length>0 && <NavButtons mill={mill} stops={r.stops||[]} farms={farms} />}
-                  <button onClick={()=>openEdit(r)} style={{ fontSize:11, padding:'5px 10px', borderRadius:6, border:'0.5px solid #4CAF7D', background:'#eaf5ee', color:'#27500A', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>Edit</button>
+                  <NavButtons mill={mill} stops={r.stops||[]} farms={farms} />
+                  <button onClick={()=>openEdit(r)} style={{ fontSize:11, padding:'5px 10px', borderRadius:6, border:'0.5px solid #e8ede9', background:'#fff', color:'#6a7a8a', cursor:'pointer', fontFamily:'inherit', fontWeight:600 }}>Edit</button>
                 </div>
               </div>
             </div>
