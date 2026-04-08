@@ -48,11 +48,10 @@ const icons: Record<string, string> = {
 export default function SidebarNav() {
   const path   = usePathname()
   const router = useRouter()
-  const { farms, currentFarm, setCurrentFarm, loading } = useFarm()
-  const [dropdownOpen,   setDropdownOpen]   = useState(false)
-  const [feedMills,      setFeedMills]      = useState<FeedMill[]>([])
-  const [selectedMillId, setSelectedMillId] = useState<string>('')
-  const [alertCount,     setAlertCount]     = useState(0)
+  const { farms, visibleFarms, currentFarm, setCurrentFarm, selectedMillId, setSelectedMillId, loading } = useFarm()
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [feedMills,    setFeedMills]    = useState<FeedMill[]>([])
+  const [alertCount,   setAlertCount]   = useState(0)
 
   useEffect(() => {
     supabase.from('feed_mills').select('id, name').order('name')
@@ -60,17 +59,6 @@ export default function SidebarNav() {
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('acknowledged', false)
       .then(({ count }) => setAlertCount(count || 0))
   }, [])
-
-  const filteredFarms = selectedMillId
-    ? (farms as any[]).filter(f => f.feed_mill_id === selectedMillId)
-    : farms
-
-  useEffect(() => {
-    if (selectedMillId && currentFarm) {
-      const stillValid = filteredFarms.find(f => f.id === currentFarm.id)
-      if (!stillValid && filteredFarms.length > 0) setCurrentFarm(filteredFarms[0])
-    }
-  }, [selectedMillId])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -122,6 +110,7 @@ export default function SidebarNav() {
 
       <div style={{ margin: '8px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
 
+        {/* Mill selector */}
         <div>
           <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Feed mill</p>
           <div style={{ position: 'relative' }}>
@@ -148,6 +137,7 @@ export default function SidebarNav() {
           )}
         </div>
 
+        {/* Farm selector */}
         <div style={{ position: 'relative' }}>
           <button onClick={() => setDropdownOpen(prev => !prev)}
             style={{ width: '100%', padding: '10px 12px', background: '#f9fafb', border: '1px solid ' + (dropdownOpen ? '#4CAF7D' : '#e5e7eb'), borderRadius: 8, cursor: 'pointer', textAlign: 'left' }}>
@@ -174,14 +164,14 @@ export default function SidebarNav() {
               <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 -8px 24px rgba(0,0,0,0.10)', overflow: 'hidden', zIndex: 100, maxHeight: 320, overflowY: 'auto' }}>
                 <div style={{ padding: '8px 12px 6px', borderBottom: '0.5px solid #f0f4f0', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                   <span style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600 }}>
-                    {filteredFarms.length} farm{filteredFarms.length !== 1 ? 's' : ''}{selectedMillId ? ' — filtered' : ''}
+                    {visibleFarms.length} farm{visibleFarms.length !== 1 ? 's' : ''}{selectedMillId ? ' — filtered' : ''}
                   </span>
                 </div>
                 {loading ? (
                   <div style={{ padding: '12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>Loading...</div>
-                ) : filteredFarms.length === 0 ? (
+                ) : visibleFarms.length === 0 ? (
                   <div style={{ padding: '12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>No farms for this mill</div>
-                ) : filteredFarms.map(farm => {
+                ) : visibleFarms.map(farm => {
                   const selected = farm.id === currentFarm?.id
                   return (
                     <button key={farm.id} onClick={() => { setDropdownOpen(false); if (!selected) setCurrentFarm(farm) }}
