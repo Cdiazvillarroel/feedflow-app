@@ -86,6 +86,27 @@ function buildGoogleMapsEmbedUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
   return url
 }
 
+function buildWazeUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
+  const sorted = [...stops].sort((a, b) => a.order - b.order)
+  if (sorted.length === 0) return null
+  // Waze solo soporta destino único — usamos la primera parada
+  const first = sorted[0]
+  const farm  = farms.find(f => f.id === first.farm_id)
+  if (farm?.lat && farm?.lng) return `https://waze.com/ul?ll=${farm.lat},${farm.lng}&navigate=yes`
+  if (first.location) return `https://waze.com/ul?q=${encodeURIComponent(first.location)}&navigate=yes`
+  return null
+}
+
+function buildAppleMapsUrl(mill: FeedMill, stops: any[], farms: Farm[]) {
+  const sorted = [...stops].sort((a, b) => a.order - b.order)
+  if (sorted.length === 0) return null
+  const origin = mill.lat && mill.lng ? `${mill.lat},${mill.lng}` : encodeURIComponent(mill.location || mill.name)
+  const last   = sorted[sorted.length - 1]
+  const farm   = farms.find(f => f.id === last.farm_id)
+  const dest   = farm?.lat && farm?.lng ? `${farm.lat},${farm.lng}` : encodeURIComponent(last.location || last.farm_name)
+  return `https://maps.apple.com/?saddr=${origin}&daddr=${dest}&dirflg=d`
+}
+
 export default function RoutesPage() {
   const [feedMills,    setFeedMills]    = useState<FeedMill[]>([])
   const [farms,        setFarms]        = useState<Farm[]>([])
