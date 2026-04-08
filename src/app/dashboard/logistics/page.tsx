@@ -10,7 +10,7 @@ interface DeliveryOrder { id: string; farm_id: string; feed_mill_id: string; sta
 interface FeedMill { id: string; name: string }
 
 export default function FarmMonitorPage() {
-  const { farms: contextFarms } = useFarm()
+  const { visibleFarms: farms } = useFarm() 
 
   const [silos,     setSilos]     = useState<Silo[]>([])
   const [siloStats, setSiloStats] = useState<SiloStat[]>([])
@@ -22,7 +22,6 @@ export default function FarmMonitorPage() {
   const [selected,  setSelected]  = useState<Farm | null>(null)
 
   // Use farms from context (already filtered by mill via sidebar)
-  const farms = contextFarms as Farm[]
 
   useEffect(() => { loadAll() }, [])
 
