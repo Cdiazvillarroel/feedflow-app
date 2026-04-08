@@ -56,7 +56,7 @@ export default function FarmMonitorPage() {
     const totalKg   = stats.reduce((sum, s) => sum + s.kg_remaining, 0)
     const totalCap  = fs.reduce((sum, s) => sum + s.capacity_kg, 0)
     const pendingOrder = orders.find(o => o.farm_id === farm.id && ['pending','planned','in_transit'].includes(o.status))
-    return { fs, stats, minDays, alertLevel, totalKg, totalCap, pendingOrder }
+    return { fs, stats, minDays, alertLevel, totalKg, totalCap, pendingOrder, siloCount: fs.length }
   }
 
   const urgColor  = (a: string) => a === 'critical' ? '#E24B4A' : a === 'low' ? '#EF9F27' : '#4CAF7D'
