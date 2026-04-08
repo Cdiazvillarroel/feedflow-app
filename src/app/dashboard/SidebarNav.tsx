@@ -7,18 +7,20 @@ import { supabase } from '@/lib/supabase'
 
 const navItems = [
   { section: 'Monitor' },
-  { href: '/dashboard',           label: 'Dashboard',   icon: 'grid' },
-  { href: '/dashboard/alerts',    label: 'Alerts',      icon: 'bell',  badge: 5 },
-  { href: '/dashboard/analytics', label: 'Analytics',   icon: 'activity' },
-  { href: '/dashboard/insights',  label: 'AI Insights', icon: 'ai' },
-  { href: '/dashboard/map',       label: 'Map view',    icon: 'map' },
+  { href: '/dashboard',              label: 'Dashboard',   icon: 'grid' },
+  { href: '/dashboard/alerts',       label: 'Alerts',      icon: 'bell',  badge: 5 },
+  { href: '/dashboard/analytics',    label: 'Analytics',   icon: 'activity' },
+  { href: '/dashboard/insights',     label: 'AI Insights', icon: 'ai' },
+  { href: '/dashboard/map',          label: 'Map view',    icon: 'map' },
   { section: 'Manage' },
-  { href: '/dashboard/forecast',  label: 'Forecast',    icon: 'trending' },
-  { href: '/dashboard/costs',     label: 'Feed costs',  icon: 'dollar' },
-  { href: '/dashboard/animals',   label: 'Animals',     icon: 'users' },
-  { href: '/dashboard/sensors',   label: 'Sensors',     icon: 'wifi' },
+  { href: '/dashboard/forecast',     label: 'Forecast',    icon: 'trending' },
+  { href: '/dashboard/costs',        label: 'Feed costs',  icon: 'dollar' },
+  { href: '/dashboard/animals',      label: 'Animals',     icon: 'users' },
+  { href: '/dashboard/sensors',      label: 'Sensors',     icon: 'wifi' },
+  { section: 'Logistics' },
+  { href: '/dashboard/logistics',    label: 'Logistics',   icon: 'truck' },
   { section: 'Settings' },
-  { href: '/dashboard/account',   label: 'Account',     icon: 'settings' },
+  { href: '/dashboard/account',      label: 'Account',     icon: 'settings' },
 ]
 
 const icons: Record<string, string> = {
@@ -31,6 +33,7 @@ const icons: Record<string, string> = {
   dollar:   'M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
   users:    'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75',
   wifi:     'M12 20h.01M2 8.82a15 15 0 0 1 20 0M6 12.7a9 9 0 0 1 12 0M9.5 16.5a5 5 0 0 1 5 0',
+  truck:    'M1 3h15v13H1zM16 8h4l3 3v5h-7V8zM5.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM18.5 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
   settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
 }
 
@@ -52,15 +55,20 @@ export default function SidebarNav() {
       <div style={{ flex: 1 }}>
         {navItems.map((item, i) => {
           if ('section' in item) {
-            return <p key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 18px 4px', margin: 0 }}>{item.section}</p>
+            return (
+              <p key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 18px 4px', margin: 0 }}>
+                {item.section}
+              </p>
+            )
           }
-          const active = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
-          const isAI   = item.icon === 'ai'
+          const active  = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
+          const isAI    = item.icon === 'ai'
+          const isTruck = item.icon === 'truck'
           return (
             <Link key={item.href} href={item.href}
               style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 18px', margin: '1px 8px', borderRadius: 6, fontSize: 13, fontWeight: active ? 600 : 400, color: active ? '#166534' : '#374151', background: active ? '#dcfce7' : 'transparent', textDecoration: 'none' }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                stroke={isAI && !active ? '#4CAF7D' : 'currentColor'}
+                stroke={isAI && !active ? '#4CAF7D' : isTruck && !active ? '#4A90C4' : 'currentColor'}
                 strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
                 style={{ flexShrink: 0, opacity: active ? 1 : 0.6 }}>
                 <path d={icons[item.icon]} />
@@ -69,7 +77,10 @@ export default function SidebarNav() {
               {isAI && !active && (
                 <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: 'rgba(76,175,125,0.12)', color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.3)' }}>AI</span>
               )}
-              {item.badge && !isAI && (
+              {isTruck && !active && (
+                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: 'rgba(74,144,196,0.12)', color: '#4A90C4', border: '0.5px solid rgba(74,144,196,0.3)' }}>NEW</span>
+              )}
+              {item.badge && !isAI && !isTruck && (
                 <span style={{ background: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10 }}>{item.badge}</span>
               )}
             </Link>
@@ -89,7 +100,7 @@ export default function SidebarNav() {
 
       <div style={{ margin: '8px 10px 12px', position: 'relative' }}>
         <button onClick={() => setDropdownOpen(prev => !prev)}
-          style={{ width: '100%', padding: '10px 12px', background: '#f9fafb', border: `1px solid ${dropdownOpen ? '#4CAF7D' : '#e5e7eb'}`, borderRadius: 8, cursor: 'pointer', textAlign: 'left' }}>
+          style={{ width: '100%', padding: '10px 12px', background: '#f9fafb', border: '1px solid ' + (dropdownOpen ? '#4CAF7D' : '#e5e7eb'), borderRadius: 8, cursor: 'pointer', textAlign: 'left' }}>
           <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current farm</p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
