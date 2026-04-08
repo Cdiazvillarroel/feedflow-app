@@ -18,7 +18,10 @@ const navItems = [
   { href: '/dashboard/animals',      label: 'Animals',     icon: 'users' },
   { href: '/dashboard/sensors',      label: 'Sensors',     icon: 'wifi' },
   { section: 'Logistics' },
-  { href: '/dashboard/logistics',    label: 'Logistics',   icon: 'truck' },
+  { href: '/dashboard/logistics',         label: 'Farm Monitor', icon: 'truck'   },
+  { href: '/dashboard/logistics/orders',  label: 'Orders',       icon: 'clipboard' },
+  { href: '/dashboard/logistics/routes',  label: 'Route Planner',icon: 'route'   },
+  { href: '/dashboard/logistics/drivers', label: 'Drivers',      icon: 'driver'  },
   { section: 'Settings' },
   { href: '/dashboard/account',      label: 'Account',     icon: 'settings' },
 ]
