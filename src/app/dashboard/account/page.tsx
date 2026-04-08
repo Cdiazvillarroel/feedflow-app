@@ -8,7 +8,8 @@ interface Silo        { id: string; farm_id: string; name: string; material: str
 interface Sensor      { id: string; silo_id: string; serial: string; model: string; status: string; battery_pct: number; signal_strength: number }
 interface AnimalGroup { id: string; farm_id: string; name: string; type: string; icon: string | null; count: number }
 
-type Tab = 'farms' | 'silos' | 'sensors' | 'animals' | 'users'
+type Tab    = 'silos' | 'sensors' | 'animals' | 'farms' | 'users' | 'profile'
+type Role   = 'owner' | 'manager' | 'viewer' | null
 
 const ANIMAL_TYPES = ['pig', 'poultry', 'cattle', 'sheep', 'other']
 const MATERIALS    = ['Lactation diet', 'Gestation diet', 'Maize meal', 'Wheat bran', 'Soybean meal', 'Barley', 'Other']
@@ -23,19 +24,43 @@ function labelStyle(): React.CSSProperties {
 }
 
 export default function AccountPage() {
-  const [tab,     setTab]     = useState<Tab>('farms')
+  const [tab,     setTab]     = useState<Tab>('silos')
   const [farms,   setFarms]   = useState<Farm[]>([])
   const [silos,   setSilos]   = useState<Silo[]>([])
   const [sensors, setSensors] = useState<Sensor[]>([])
   const [animals, setAnimals] = useState<AnimalGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [msg,     setMsg]     = useState('')
+  const [role,    setRole]    = useState<Role>(null)
+  const [userId,  setUserId]  = useState<string | null>(null)
+  const [userEmail, setUserEmail] = useState('')
+
   const activeFarmId = getActiveFarmId()
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => { init() }, [])
 
-  async function loadAll() {
+  async function init() {
     setLoading(true)
+
+    // Get current user and their role on active farm
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
+      setUserId(user.id)
+      setUserEmail(user.email || '')
+      const { data: uf } = await supabase
+        .from('user_farms')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('farm_id', activeFarmId)
+        .single()
+      const userRole = (uf?.role || 'viewer') as Role
+      setRole(userRole)
+
+      // Set default tab based on role
+      if (userRole === 'owner') setTab('farms')
+      else setTab('silos')
+    }
+
     const [f, s, sen, a] = await Promise.all([
       supabase.from('farms').select('*').order('name'),
       supabase.from('silos').select('*').order('name'),
@@ -54,12 +79,17 @@ export default function AccountPage() {
     setTimeout(() => setMsg(''), 3000)
   }
 
-  const tabs: { key: Tab; label: string; count: number }[] = [
-    { key: 'farms',   label: 'Farms',   count: farms.length },
+  const canEdit    = role === 'owner' || role === 'manager'
+  const isOwner    = role === 'owner'
+
+  type TabDef = { key: Tab; label: string; count?: number }
+  const tabs: TabDef[] = [
+    ...(isOwner ? [{ key: 'farms' as Tab,   label: 'Farms',   count: farms.length }] : []),
     { key: 'silos',   label: 'Silos',   count: silos.length },
     { key: 'sensors', label: 'Sensors', count: sensors.length },
     { key: 'animals', label: 'Animals', count: animals.length },
-    { key: 'users',   label: 'Users',   count: 0 },
+    ...(isOwner ? [{ key: 'users' as Tab,   label: 'Users' }] : []),
+    ...(!isOwner ? [{ key: 'profile' as Tab, label: 'My profile' }] : []),
   ]
 
   if (loading) return (
@@ -76,7 +106,14 @@ export default function AccountPage() {
       <div className="page-header">
         <div>
           <div className="page-title">Account</div>
-          <div className="page-sub">Manage farms, silos, sensors, animals and users</div>
+          <div className="page-sub">
+            {role && (
+              <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, background: role === 'owner' ? '#eaf5ee' : role === 'manager' ? '#E6F1FB' : '#f0f4f0', color: role === 'owner' ? '#27500A' : role === 'manager' ? '#0C447C' : '#6a7a8a', fontWeight: 600, marginRight: 8 }}>
+                {role.charAt(0).toUpperCase() + role.slice(1)}
+              </span>
+            )}
+            {userEmail}
+          </div>
         </div>
         {msg && (
           <div style={{ padding: '7px 14px', background: '#eaf5ee', border: '0.5px solid #4CAF7D', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#27500A' }}>
@@ -90,7 +127,7 @@ export default function AccountPage() {
           <button key={t.key} onClick={() => setTab(t.key)}
             style={{ padding: '9px 18px', fontSize: 13, fontWeight: tab === t.key ? 600 : 400, cursor: 'pointer', border: 'none', background: 'transparent', fontFamily: 'inherit', color: tab === t.key ? '#1a2530' : '#8a9aaa', borderBottom: tab === t.key ? '2px solid #4CAF7D' : '2px solid transparent', marginBottom: -1 }}>
             {t.label}
-            {t.count > 0 && (
+            {t.count != null && t.count > 0 && (
               <span style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 10, background: tab === t.key ? '#eaf5ee' : '#f0f4f0', color: tab === t.key ? '#27500A' : '#aab8c0', fontWeight: 600 }}>
                 {t.count}
               </span>
@@ -99,12 +136,77 @@ export default function AccountPage() {
         ))}
       </div>
 
-      {tab === 'farms'   && <FarmsTab   farms={farms} onRefresh={loadAll} onMsg={showMsg} activeFarmId={activeFarmId} />}
-      {tab === 'silos'   && <SilosTab   silos={silos} farms={farms} onRefresh={loadAll} onMsg={showMsg} activeFarmId={activeFarmId} />}
-      {tab === 'sensors' && <SensorsTab sensors={sensors} silos={silos} farms={farms} onRefresh={loadAll} onMsg={showMsg} />}
-      {tab === 'animals' && <AnimalsTab animals={animals} farms={farms} onRefresh={loadAll} onMsg={showMsg} activeFarmId={activeFarmId} />}
-      {tab === 'users'   && <UsersTab   farms={farms} onMsg={showMsg} />}
+      {tab === 'farms'   && isOwner  && <FarmsTab   farms={farms} onRefresh={init} onMsg={showMsg} activeFarmId={activeFarmId} />}
+      {tab === 'silos'              && <SilosTab   silos={silos} farms={farms} onRefresh={init} onMsg={showMsg} activeFarmId={activeFarmId} canEdit={canEdit} />}
+      {tab === 'sensors'            && <SensorsTab sensors={sensors} silos={silos} farms={farms} onRefresh={init} onMsg={showMsg} canEdit={canEdit} />}
+      {tab === 'animals'            && <AnimalsTab animals={animals} farms={farms} onRefresh={init} onMsg={showMsg} activeFarmId={activeFarmId} canEdit={canEdit} />}
+      {tab === 'users'   && isOwner  && <UsersTab   farms={farms} onMsg={showMsg} />}
+      {tab === 'profile' && !isOwner && <ProfileTab userId={userId} userEmail={userEmail} onMsg={showMsg} />}
     </>
+  )
+}
+
+// ── PROFILE TAB ───────────────────────────────────────────────────────────────
+function ProfileTab({ userId, userEmail, onMsg }: { userId: string | null; userEmail: string; onMsg: (m: string) => void }) {
+  const [newPass,    setNewPass]    = useState('')
+  const [confirmPass, setConfirmPass] = useState('')
+  const [saving,     setSaving]     = useState(false)
+  const [error,      setError]      = useState('')
+
+  async function savePassword() {
+    if (!newPass || newPass.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (newPass !== confirmPass) { setError('Passwords do not match'); return }
+    setSaving(true); setError('')
+    const res  = await fetch('/api/admin/update-user', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, password: newPass }),
+    })
+    const data = await res.json()
+    if (data.error) { setError(data.error); setSaving(false); return }
+    setNewPass(''); setConfirmPass(''); setSaving(false)
+    onMsg('Password updated successfully')
+  }
+
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <div className="card" style={{ marginBottom: 0 }}>
+        <div className="card-header"><div className="card-title">My profile</div></div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#f7f9f8', borderRadius: 8 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#1a2530', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+              {userEmail.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#1a2530' }}>{userEmail}</div>
+              <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 2 }}>Manager</div>
+            </div>
+          </div>
+
+          <div style={{ height: '0.5px', background: '#e8ede9' }} />
+
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530', marginBottom: 14 }}>Change password</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={labelStyle()}>New password</label>
+                <input type="password" style={inputStyle(true)} value={newPass}
+                  onChange={e => setNewPass(e.target.value)} placeholder="Min 6 characters" />
+              </div>
+              <div>
+                <label style={labelStyle()}>Confirm password</label>
+                <input type="password" style={inputStyle(true)} value={confirmPass}
+                  onChange={e => setConfirmPass(e.target.value)} placeholder="Repeat new password" />
+              </div>
+              {error && <div style={{ background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#A32D2D' }}>{error}</div>}
+              <button onClick={savePassword} disabled={saving || !newPass || !confirmPass}
+                style={{ padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {saving ? 'Saving...' : 'Update password'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -191,7 +293,7 @@ function FarmsTab({ farms, onRefresh, onMsg, activeFarmId }: { farms: Farm[]; on
 }
 
 // ── SILOS TAB ─────────────────────────────────────────────────────────────────
-function SilosTab({ silos, farms, onRefresh, onMsg, activeFarmId }: { silos: Silo[]; farms: Farm[]; onRefresh: () => void; onMsg: (m: string) => void; activeFarmId: string }) {
+function SilosTab({ silos, farms, onRefresh, onMsg, activeFarmId, canEdit }: { silos: Silo[]; farms: Farm[]; onRefresh: () => void; onMsg: (m: string) => void; activeFarmId: string; canEdit: boolean }) {
   const empty = { farm_id: activeFarmId, name: '', material: 'Lactation diet', capacity_kg: '20000', digitplan_silo_id: '' }
   const [form, setForm]       = useState(empty)
   const [editing, setEditing] = useState<string | null>(null)
@@ -222,7 +324,7 @@ function SilosTab({ silos, farms, onRefresh, onMsg, activeFarmId }: { silos: Sil
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: canEdit ? '1fr 340px' : '1fr', gap: 20, alignItems: 'start' }}>
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">Silos</div>
@@ -233,7 +335,7 @@ function SilosTab({ silos, farms, onRefresh, onMsg, activeFarmId }: { silos: Sil
         </div>
         {filtered.length === 0 ? <div style={{ color: '#8a9aaa', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>No silos found.</div> : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr>{['Silo','Farm','Material','Capacity','DigitPlan ID',''].map(h => <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['Silo','Farm','Material','Capacity','DigitPlan ID', ...(canEdit ? [''] : [])].map(h => <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>)}</tr></thead>
             <tbody>
               {filtered.map(s => (
                 <tr key={s.id}>
@@ -242,53 +344,57 @@ function SilosTab({ silos, farms, onRefresh, onMsg, activeFarmId }: { silos: Sil
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa' }}>{s.material || '—'}</td>
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa' }}>{(s.capacity_kg/1000).toFixed(0)} t</td>
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa', fontFamily: 'monospace' }}>{s.digitplan_silo_id || '—'}</td>
-                  <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => edit(s)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#6a7a8a' }}>Edit</button>
-                      <button onClick={() => remove(s.id)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>Delete</button>
-                    </div>
-                  </td>
+                  {canEdit && (
+                    <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => edit(s)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#6a7a8a' }}>Edit</button>
+                        <button onClick={() => remove(s.id)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>Delete</button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
-      <div className="card" style={{ marginBottom: 0 }}>
-        <div className="card-header"><div className="card-title">{editing ? 'Edit silo' : 'New silo'}</div></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div><label style={labelStyle()}>Farm *</label>
-            <select style={{ ...inputStyle(true) }} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
-              <option value="">Select farm</option>
-              {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-          </div>
-          <div><label style={labelStyle()}>Silo name *</label><input style={inputStyle(true)} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Silo R-1" /></div>
-          <div><label style={labelStyle()}>Material</label>
-            <select style={{ ...inputStyle(true) }} value={form.material} onChange={e => setForm(p => ({ ...p, material: e.target.value }))}>
-              {MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </div>
-          <div><label style={labelStyle()}>Capacity (kg)</label><input style={inputStyle(true)} value={form.capacity_kg} onChange={e => setForm(p => ({ ...p, capacity_kg: e.target.value }))} placeholder="20000" type="number" step="1000" /></div>
-          <div>
-            <label style={labelStyle()}>DigitPlan Silo ID</label>
-            <input style={inputStyle(true)} value={form.digitplan_silo_id} onChange={e => setForm(p => ({ ...p, digitplan_silo_id: e.target.value }))} placeholder="101" type="number" />
-            <p style={{ fontSize: 11, color: '#aab8c0', marginTop: 4 }}>ID from DigitPlan API — links sensor data to this silo</p>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={save} disabled={saving || !form.name.trim() || !form.farm_id} style={{ flex: 1, padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
-              {saving ? 'Saving...' : editing ? 'Update silo' : 'Create silo'}
-            </button>
-            {editing && <button onClick={() => { setEditing(null); setForm(empty) }} style={{ padding: '9px 14px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#6a7a8a', fontFamily: 'inherit' }}>Cancel</button>}
+      {canEdit && (
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header"><div className="card-title">{editing ? 'Edit silo' : 'New silo'}</div></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div><label style={labelStyle()}>Farm *</label>
+              <select style={{ ...inputStyle(true) }} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
+                <option value="">Select farm</option>
+                {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </div>
+            <div><label style={labelStyle()}>Silo name *</label><input style={inputStyle(true)} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Silo R-1" /></div>
+            <div><label style={labelStyle()}>Material</label>
+              <select style={{ ...inputStyle(true) }} value={form.material} onChange={e => setForm(p => ({ ...p, material: e.target.value }))}>
+                {MATERIALS.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div><label style={labelStyle()}>Capacity (kg)</label><input style={inputStyle(true)} value={form.capacity_kg} onChange={e => setForm(p => ({ ...p, capacity_kg: e.target.value }))} placeholder="20000" type="number" step="1000" /></div>
+            <div>
+              <label style={labelStyle()}>DigitPlan Silo ID</label>
+              <input style={inputStyle(true)} value={form.digitplan_silo_id} onChange={e => setForm(p => ({ ...p, digitplan_silo_id: e.target.value }))} placeholder="101" type="number" />
+              <p style={{ fontSize: 11, color: '#aab8c0', marginTop: 4 }}>ID from DigitPlan API</p>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={save} disabled={saving || !form.name.trim() || !form.farm_id} style={{ flex: 1, padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {saving ? 'Saving...' : editing ? 'Update silo' : 'Create silo'}
+              </button>
+              {editing && <button onClick={() => { setEditing(null); setForm(empty) }} style={{ padding: '9px 14px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#6a7a8a', fontFamily: 'inherit' }}>Cancel</button>}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
 
 // ── SENSORS TAB ───────────────────────────────────────────────────────────────
-function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sensor[]; silos: Silo[]; farms: Farm[]; onRefresh: () => void; onMsg: (m: string) => void }) {
+function SensorsTab({ sensors, silos, farms, onRefresh, onMsg, canEdit }: { sensors: Sensor[]; silos: Silo[]; farms: Farm[]; onRefresh: () => void; onMsg: (m: string) => void; canEdit: boolean }) {
   const empty = { silo_id: '', serial: '', model: 'SiloMetric Laser', firmware: '' }
   const [form, setForm]             = useState(empty)
   const [editing, setEditing]       = useState<string | null>(null)
@@ -297,8 +403,8 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
 
   const filteredSilos   = farmFilter ? silos.filter(s => s.farm_id === farmFilter) : silos
   const filteredSensors = farmFilter ? sensors.filter(sen => silos.find(s => s.id === sen.silo_id && s.farm_id === farmFilter)) : sensors
-  const siloName   = (id: string) => silos.find(s => s.id === id)?.name || '—'
-  const farmOfSilo = (siloId: string) => { const silo = silos.find(s => s.id === siloId); return silo ? farms.find(f => f.id === silo.farm_id)?.name || '—' : '—' }
+  const siloName    = (id: string) => silos.find(s => s.id === id)?.name || '—'
+  const farmOfSilo  = (siloId: string) => { const silo = silos.find(s => s.id === siloId); return silo ? farms.find(f => f.id === silo.farm_id)?.name || '—' : '—' }
   const statusColor = (s: string) => s === 'online' ? '#27500A' : s === 'delayed' ? '#633806' : '#A32D2D'
   const statusBg    = (s: string) => s === 'online' ? '#eaf5ee' : s === 'delayed' ? '#FAEEDA' : '#FCEBEB'
 
@@ -310,7 +416,7 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
       onMsg('Sensor updated')
     } else {
       const existing = sensors.find(s => s.silo_id === form.silo_id)
-      if (existing) { onMsg('This silo already has a sensor — edit it instead'); setSaving(false); return }
+      if (existing) { onMsg('This silo already has a sensor'); setSaving(false); return }
       await supabase.from('sensors').insert({ silo_id: form.silo_id, serial: form.serial.trim().toUpperCase(), model: form.model, firmware: form.firmware || null, status: 'online', battery_pct: 100, signal_strength: 3, installed_at: new Date().toISOString(), last_seen_at: new Date().toISOString() })
       onMsg('Sensor enrolled')
     }
@@ -329,7 +435,7 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: canEdit ? '1fr 340px' : '1fr', gap: 20, alignItems: 'start' }}>
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">Enrolled sensors</div>
@@ -340,7 +446,7 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
         </div>
         {filteredSensors.length === 0 ? <div style={{ color: '#8a9aaa', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>No sensors enrolled yet.</div> : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr>{['Serial','Silo','Farm','Model','Status','Battery',''].map(h => <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['Serial','Silo','Farm','Model','Status','Battery', ...(canEdit ? [''] : [])].map(h => <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>)}</tr></thead>
             <tbody>
               {filteredSensors.map(s => (
                 <tr key={s.id}>
@@ -355,55 +461,58 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg }: { sensors: Sens
                       <span style={{ fontSize: 11, color: '#8a9aaa' }}>{s.battery_pct}%</span>
                     </div>
                   </td>
-                  <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => edit(s)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#6a7a8a' }}>Edit</button>
-                      <button onClick={() => remove(s.id)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>Delete</button>
-                    </div>
-                  </td>
+                  {canEdit && (
+                    <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => edit(s)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#6a7a8a' }}>Edit</button>
+                        <button onClick={() => remove(s.id)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>Delete</button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
-      <div className="card" style={{ marginBottom: 0 }}>
-        <div className="card-header"><div className="card-title">{editing ? 'Edit sensor' : 'Enroll sensor'}</div></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ background: '#f7f9f8', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#6a7a8a', lineHeight: 1.5 }}>Each sensor is assigned to one silo. The serial number links the physical device to FeedFlow.</div>
-          <div><label style={labelStyle()}>Farm (filter)</label>
-            <select style={{ ...inputStyle(true) }} value={farmFilter} onChange={e => { setFarmFilter(e.target.value); setForm(p => ({ ...p, silo_id: '' })) }}>
-              <option value="">All farms</option>
-              {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-          </div>
-          <div><label style={labelStyle()}>Silo *</label>
-            <select style={{ ...inputStyle(true) }} value={form.silo_id} onChange={e => setForm(p => ({ ...p, silo_id: e.target.value }))}>
-              <option value="">Select silo</option>
-              {filteredSilos.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={labelStyle()}>Serial number *</label>
-            <input style={inputStyle(true)} value={form.serial} onChange={e => setForm(p => ({ ...p, serial: e.target.value }))} placeholder="SM-R101" />
-            <p style={{ fontSize: 11, color: '#aab8c0', marginTop: 4 }}>Found on the physical sensor device</p>
-          </div>
-          <div><label style={labelStyle()}>Model</label><input style={inputStyle(true)} value={form.model} onChange={e => setForm(p => ({ ...p, model: e.target.value }))} placeholder="SiloMetric Laser" /></div>
-          <div><label style={labelStyle()}>Firmware version</label><input style={inputStyle(true)} value={form.firmware} onChange={e => setForm(p => ({ ...p, firmware: e.target.value }))} placeholder="v3.1.2" /></div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={save} disabled={saving || !form.silo_id || !form.serial.trim()} style={{ flex: 1, padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
-              {saving ? 'Saving...' : editing ? 'Update sensor' : 'Enroll sensor'}
-            </button>
-            {editing && <button onClick={() => { setEditing(null); setForm(empty) }} style={{ padding: '9px 14px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#6a7a8a', fontFamily: 'inherit' }}>Cancel</button>}
+      {canEdit && (
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header"><div className="card-title">{editing ? 'Edit sensor' : 'Enroll sensor'}</div></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ background: '#f7f9f8', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#6a7a8a', lineHeight: 1.5 }}>Each sensor is assigned to one silo.</div>
+            <div><label style={labelStyle()}>Farm (filter)</label>
+              <select style={{ ...inputStyle(true) }} value={farmFilter} onChange={e => { setFarmFilter(e.target.value); setForm(p => ({ ...p, silo_id: '' })) }}>
+                <option value="">All farms</option>
+                {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </div>
+            <div><label style={labelStyle()}>Silo *</label>
+              <select style={{ ...inputStyle(true) }} value={form.silo_id} onChange={e => setForm(p => ({ ...p, silo_id: e.target.value }))}>
+                <option value="">Select silo</option>
+                {filteredSilos.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle()}>Serial number *</label>
+              <input style={inputStyle(true)} value={form.serial} onChange={e => setForm(p => ({ ...p, serial: e.target.value }))} placeholder="SM-R101" />
+            </div>
+            <div><label style={labelStyle()}>Model</label><input style={inputStyle(true)} value={form.model} onChange={e => setForm(p => ({ ...p, model: e.target.value }))} placeholder="SiloMetric Laser" /></div>
+            <div><label style={labelStyle()}>Firmware</label><input style={inputStyle(true)} value={form.firmware} onChange={e => setForm(p => ({ ...p, firmware: e.target.value }))} placeholder="v3.1.2" /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={save} disabled={saving || !form.silo_id || !form.serial.trim()} style={{ flex: 1, padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {saving ? 'Saving...' : editing ? 'Update sensor' : 'Enroll sensor'}
+              </button>
+              {editing && <button onClick={() => { setEditing(null); setForm(empty) }} style={{ padding: '9px 14px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#6a7a8a', fontFamily: 'inherit' }}>Cancel</button>}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
 
 // ── ANIMALS TAB ───────────────────────────────────────────────────────────────
-function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId }: { animals: AnimalGroup[]; farms: Farm[]; onRefresh: () => void; onMsg: (m: string) => void; activeFarmId: string }) {
+function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId, canEdit }: { animals: AnimalGroup[]; farms: Farm[]; onRefresh: () => void; onMsg: (m: string) => void; activeFarmId: string; canEdit: boolean }) {
   const TYPE_ICONS: Record<string, string> = { pig: '🐖', poultry: '🐔', cattle: '🐄', sheep: '🐑', other: '🐾' }
   const empty = { farm_id: activeFarmId, name: '', type: 'pig', icon: '🐖', count: '0' }
   const [form, setForm]       = useState(empty)
@@ -435,7 +544,7 @@ function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId }: { animal
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: canEdit ? '1fr 340px' : '1fr', gap: 20, alignItems: 'start' }}>
       <div className="card" style={{ marginBottom: 0 }}>
         <div className="card-header">
           <div className="card-title">Animal groups</div>
@@ -446,7 +555,7 @@ function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId }: { animal
         </div>
         {filtered.length === 0 ? <div style={{ color: '#8a9aaa', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>No animal groups found.</div> : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead><tr>{['Group','Farm','Type','Count',''].map(h => <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>)}</tr></thead>
+            <thead><tr>{['Group','Farm','Type','Count', ...(canEdit ? [''] : [])].map(h => <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>)}</tr></thead>
             <tbody>
               {filtered.map(a => (
                 <tr key={a.id}>
@@ -459,45 +568,49 @@ function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId }: { animal
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa' }}>{farmName(a.farm_id)}</td>
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa', textTransform: 'capitalize' }}>{a.type}</td>
                   <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{a.count.toLocaleString()}</td>
-                  <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={() => edit(a)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#6a7a8a' }}>Edit</button>
-                      <button onClick={() => remove(a.id)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>Delete</button>
-                    </div>
-                  </td>
+                  {canEdit && (
+                    <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button onClick={() => edit(a)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #e8ede9', background: '#fff', cursor: 'pointer', color: '#6a7a8a' }}>Edit</button>
+                        <button onClick={() => remove(a.id)} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '0.5px solid #FCEBEB', background: '#FCEBEB', cursor: 'pointer', color: '#A32D2D' }}>Delete</button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
-      <div className="card" style={{ marginBottom: 0 }}>
-        <div className="card-header"><div className="card-title">{editing ? 'Edit group' : 'New group'}</div></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div><label style={labelStyle()}>Farm *</label>
-            <select style={{ ...inputStyle(true) }} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
-              <option value="">Select farm</option>
-              {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-          </div>
-          <div><label style={labelStyle()}>Group name *</label><input style={inputStyle(true)} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Lactating sows" /></div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 10 }}>
-            <div><label style={labelStyle()}>Animal type</label>
-              <select style={{ ...inputStyle(true) }} value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value, icon: TYPE_ICONS[e.target.value] }))}>
-                {ANIMAL_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+      {canEdit && (
+        <div className="card" style={{ marginBottom: 0 }}>
+          <div className="card-header"><div className="card-title">{editing ? 'Edit group' : 'New group'}</div></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div><label style={labelStyle()}>Farm *</label>
+              <select style={{ ...inputStyle(true) }} value={form.farm_id} onChange={e => setForm(p => ({ ...p, farm_id: e.target.value }))}>
+                <option value="">Select farm</option>
+                {farms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
               </select>
             </div>
-            <div><label style={labelStyle()}>Icon</label><input style={inputStyle(true)} value={form.icon} onChange={e => setForm(p => ({ ...p, icon: e.target.value }))} placeholder="🐖" /></div>
-          </div>
-          <div><label style={labelStyle()}>Head count</label><input style={inputStyle(true)} value={form.count} onChange={e => setForm(p => ({ ...p, count: e.target.value }))} placeholder="120" type="number" min="0" /></div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={save} disabled={saving || !form.name.trim() || !form.farm_id} style={{ flex: 1, padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
-              {saving ? 'Saving...' : editing ? 'Update group' : 'Create group'}
-            </button>
-            {editing && <button onClick={() => { setEditing(null); setForm(empty) }} style={{ padding: '9px 14px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#6a7a8a', fontFamily: 'inherit' }}>Cancel</button>}
+            <div><label style={labelStyle()}>Group name *</label><input style={inputStyle(true)} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Lactating sows" /></div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: 10 }}>
+              <div><label style={labelStyle()}>Animal type</label>
+                <select style={{ ...inputStyle(true) }} value={form.type} onChange={e => setForm(p => ({ ...p, type: e.target.value, icon: TYPE_ICONS[e.target.value] }))}>
+                  {ANIMAL_TYPES.map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+                </select>
+              </div>
+              <div><label style={labelStyle()}>Icon</label><input style={inputStyle(true)} value={form.icon} onChange={e => setForm(p => ({ ...p, icon: e.target.value }))} placeholder="🐖" /></div>
+            </div>
+            <div><label style={labelStyle()}>Head count</label><input style={inputStyle(true)} value={form.count} onChange={e => setForm(p => ({ ...p, count: e.target.value }))} placeholder="120" type="number" min="0" /></div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={save} disabled={saving || !form.name.trim() || !form.farm_id} style={{ flex: 1, padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
+                {saving ? 'Saving...' : editing ? 'Update group' : 'Create group'}
+              </button>
+              {editing && <button onClick={() => { setEditing(null); setForm(empty) }} style={{ padding: '9px 14px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 8, fontSize: 13, cursor: 'pointer', color: '#6a7a8a', fontFamily: 'inherit' }}>Cancel</button>}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
@@ -525,15 +638,15 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
   useEffect(() => { loadUsers() }, [])
 
   async function loadUsers() {
-  setLoading(true)
-  const res      = await fetch(`/api/admin/list-users?t=${Date.now()}`, { cache: 'no-store' })
-  const authData = await res.json()
-  const rows     = authData.users || []
-  setUsers([])
-  await new Promise(r => setTimeout(r, 50))
-  setUsers(rows)
-  setLoading(false)
-}
+    setLoading(true)
+    const res      = await fetch(`/api/admin/list-users?t=${Date.now()}`, { cache: 'no-store' })
+    const authData = await res.json()
+    const rows     = authData.users || []
+    setUsers([])
+    await new Promise(r => setTimeout(r, 50))
+    setUsers(rows)
+    setLoading(false)
+  }
 
   function openDrawer(u: UserRow) {
     setDrawer(u)
@@ -578,8 +691,7 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
 
   async function createUser() {
     if (!form.email || !form.password || form.farm_ids.length === 0) {
-      setError('Email, password and at least one farm are required')
-      return
+      setError('Email, password and at least one farm are required'); return
     }
     setSaving(true); setError('')
     const res  = await fetch('/api/admin/create-user', {
@@ -589,10 +701,18 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
     const data = await res.json()
     if (data.error) { setError(data.error); setSaving(false); return }
     onMsg('User created')
-    setForm(empty)
-    setSaving(false)
-    await new Promise(r => setTimeout(r, 800))
-    await loadUsers()
+    setForm(empty); setSaving(false)
+    let attempts = 0
+    const tryLoad = async () => {
+      attempts++
+      await loadUsers()
+      const res2    = await fetch(`/api/admin/list-users?t=${Date.now()}`, { cache: 'no-store' })
+      const data2   = await res2.json()
+      const newUser = (data2.users || []).find((u: any) => u.email === form.email)
+      if (!newUser && attempts < 5) { await new Promise(r => setTimeout(r, 1000)); await tryLoad() }
+    }
+    await new Promise(r => setTimeout(r, 500))
+    await tryLoad()
   }
 
   const roleBadge = (r: string) =>
@@ -706,7 +826,6 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
             </div>
           ))}
         </div>
-
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">Create new user</div></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
