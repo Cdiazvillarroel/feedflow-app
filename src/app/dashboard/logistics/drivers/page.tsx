@@ -25,10 +25,8 @@ export default function DriversPage() {
   const [saving,    setSaving]    = useState(false)
   const [msg,       setMsg]       = useState('')
   const [view,      setView]      = useState<'drivers' | 'fleet'>('drivers')
-
   const [driverDrawer, setDriverDrawer] = useState<Driver | 'new' | null>(null)
   const [truckDrawer,  setTruckDrawer]  = useState<Truck  | 'new' | null>(null)
-
   const emptyDriver = { feed_mill_id: '', name: '', license: '', phone: '', email: '', truck_id: '', active: true }
   const emptyTruck  = { feed_mill_id: '', name: '', plate: '', capacity_kg: '20000', active: true }
   const [driverForm, setDriverForm] = useState(emptyDriver)
@@ -53,9 +51,7 @@ export default function DriversPage() {
 
   function showMsg(t: string) { setMsg(t); setTimeout(() => setMsg(''), 3000) }
   const millName = (id: string) => feedMills.find(m => m.id === id)?.name || '—'
-  const truckName = (id: string | null) => id ? trucks.find(t => t.id === id)?.name || '—' : '—'
 
-  // ── DRIVER CRUD ──────────────────────────────────────────────
   function openNewDriver() { setDriverForm(emptyDriver); setDriverDrawer('new') }
   function openEditDriver(d: Driver) {
     setDriverForm({ feed_mill_id: d.feed_mill_id, name: d.name, license: d.license || '', phone: d.phone || '', email: d.email || '', truck_id: d.truck_id || '', active: d.active })
@@ -80,7 +76,6 @@ export default function DriversPage() {
     setDriverDrawer(null); showMsg('Driver deleted'); loadAll()
   }
 
-  // ── TRUCK CRUD ───────────────────────────────────────────────
   function openNewTruck() { setTruckForm(emptyTruck); setTruckDrawer('new') }
   function openEditTruck(t: Truck) {
     setTruckForm({ feed_mill_id: t.feed_mill_id, name: t.name, plate: t.plate || '', capacity_kg: t.capacity_kg.toString(), active: t.active })
@@ -107,6 +102,8 @@ export default function DriversPage() {
 
   const isEditDriver = driverDrawer && driverDrawer !== 'new'
   const isEditTruck  = truckDrawer  && truckDrawer  !== 'new'
+  const visDrivers   = drivers.filter(d => !selectedMillId || d.feed_mill_id === selectedMillId)
+  const visTrucks    = trucks.filter(t => !selectedMillId || t.feed_mill_id === selectedMillId)
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#8a9aaa', fontSize: 14 }}>
@@ -119,7 +116,6 @@ export default function DriversPage() {
 
   return (
     <>
-      {/* ── DRIVER DRAWER ─────────────────────────────────────── */}
       {driverDrawer && (
         <>
           <div onClick={() => setDriverDrawer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }} />
@@ -161,8 +157,6 @@ export default function DriversPage() {
                   <div style={{ fontSize: 11, color: '#aab8c0' }}>Available for route assignment</div>
                 </div>
               </label>
-
-              {/* Assigned routes */}
               {isEditDriver && (
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10, paddingTop: 8, borderTop: '0.5px solid #e8ede9' }}>Assigned routes</div>
@@ -190,7 +184,6 @@ export default function DriversPage() {
         </>
       )}
 
-      {/* ── TRUCK DRAWER ──────────────────────────────────────── */}
       {truckDrawer && (
         <>
           <div onClick={() => setTruckDrawer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }} />
@@ -225,8 +218,6 @@ export default function DriversPage() {
                   <div style={{ fontSize: 11, color: '#aab8c0' }}>Available for delivery assignments</div>
                 </div>
               </label>
-
-              {/* Assigned driver */}
               {isEditTruck && (
                 <div style={{ paddingTop: 8, borderTop: '0.5px solid #e8ede9' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Assigned driver</div>
@@ -248,8 +239,6 @@ export default function DriversPage() {
                   })()}
                 </div>
               )}
-
-              {/* Assigned routes */}
               {isEditTruck && (
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10, paddingTop: 8, borderTop: '0.5px solid #e8ede9' }}>Recent routes</div>
@@ -277,11 +266,10 @@ export default function DriversPage() {
         </>
       )}
 
-      {/* HEADER */}
       <div className="page-header">
         <div>
           <div className="page-title">Drivers & Fleet</div>
-          <div className="page-sub">{drivers.filter(d => d.active).length} active drivers · {trucks.filter(t => t.active).length} active trucks</div>
+          <div className="page-sub">{visDrivers.filter(d => d.active).length} active drivers · {visTrucks.filter(t => t.active).length} active trucks</div>
         </div>
         <div className="page-actions">
           {msg && <div style={{ padding: '7px 14px', background: '#eaf5ee', border: '0.5px solid #4CAF7D', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#27500A' }}>{'✓ ' + msg}</div>}
@@ -290,18 +278,31 @@ export default function DriversPage() {
         </div>
       </div>
 
-      {/* SUMMARY */}
       <div className="summary-row">
-        <div className="sum-card"><div className="sum-label">Active drivers</div><div className="sum-val green">{drivers.filter(d => d.active && (!selectedMillId || d.feed_mill_id === selectedMillId)).length}</div><div className="sum-sub">Available for routes</div></div>
-        <div className="sum-card"><div className="sum-label">Inactive</div><div className="sum-val" style={{ color: '#aab8c0' }}>{drivers.filter(d => !d.active && (!selectedMillId || d.feed_mill_id === selectedMillId)).length}</div><div className="sum-sub">Drivers</div></div>
-        <div className="sum-card"><div className="sum-label">Inactive</div><div className="sum-val" style={{ color: '#aab8c0' }}>{drivers.filter(d => !d.active && (!selectedMillId || d.feed_mill_id === selectedMillId)).length}</div><<div className="sum-sub">Drivers</div></div>
-        <div className="sum-card"><div className="sum-label">Active trucks</div><div className="sum-val" style={{ color: '#4A90C4' }}>{trucks.filter(t => t.active && (!selectedMillId || t.feed_mill_id === selectedMillId)).length}</div><div className="sum-sub">Fleet vehicles</div></div>
-        <div className="sum-card"><div className="sum-label">Total capacity</div><div className="sum-val" style={{ color: '#4A90C4' }}>{(trucks.filter(t => t.active && (!selectedMillId || t.feed_mill_id === selectedMillId)).reduce((sum, t) => sum + t.capacity_kg, 0) / 1000).toFixed(0)}t</div><div className="sum-sub">Active fleet</div></div>
+        <div className="sum-card">
+          <div className="sum-label">Active drivers</div>
+          <div className="sum-val green">{visDrivers.filter(d => d.active).length}</div>
+          <div className="sum-sub">Available for routes</div>
+        </div>
+        <div className="sum-card">
+          <div className="sum-label">Inactive</div>
+          <div className="sum-val" style={{ color: '#aab8c0' }}>{visDrivers.filter(d => !d.active).length}</div>
+          <div className="sum-sub">Drivers</div>
+        </div>
+        <div className="sum-card">
+          <div className="sum-label">Active trucks</div>
+          <div className="sum-val" style={{ color: '#4A90C4' }}>{visTrucks.filter(t => t.active).length}</div>
+          <div className="sum-sub">Fleet vehicles</div>
+        </div>
+        <div className="sum-card">
+          <div className="sum-label">Total capacity</div>
+          <div className="sum-val" style={{ color: '#4A90C4' }}>{(visTrucks.filter(t => t.active).reduce((sum, t) => sum + t.capacity_kg, 0) / 1000).toFixed(0)}t</div>
+          <div className="sum-sub">Active fleet</div>
+        </div>
       </div>
 
-      {/* VIEW TOGGLE */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid #e8ede9' }}>
-        {[{ key: 'drivers', label: 'Drivers (' + drivers.length + ')' }, { key: 'fleet', label: 'Fleet (' + trucks.length + ')' }].map(v => (
+        {[{ key: 'drivers', label: 'Drivers (' + visDrivers.length + ')' }, { key: 'fleet', label: 'Fleet (' + visTrucks.length + ')' }].map(v => (
           <button key={v.key} onClick={() => setView(v.key as any)}
             style={{ padding: '9px 18px', fontSize: 13, fontWeight: view === v.key ? 600 : 400, cursor: 'pointer', border: 'none', background: 'transparent', fontFamily: 'inherit', color: view === v.key ? '#1a2530' : '#8a9aaa', borderBottom: view === v.key ? '2px solid #4CAF7D' : '2px solid transparent', marginBottom: -1 }}>
             {v.label}
@@ -309,16 +310,15 @@ export default function DriversPage() {
         ))}
       </div>
 
-      {/* DRIVERS VIEW */}
       {view === 'drivers' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {drivers.length === 0 ? (
+          {visDrivers.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8a9aaa' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>👤</div>
               <div style={{ fontSize: 15, fontWeight: 500, color: '#1a2530', marginBottom: 6 }}>No drivers yet</div>
               <button onClick={openNewDriver} className="btn-primary">+ Add first driver</button>
             </div>
-          ) : drivers.filter(d => !selectedMillId || d.feed_mill_id === selectedMillId).map(d => {  
+          ) : visDrivers.map(d => {
             const trk          = trucks.find(t => t.id === d.truck_id)
             const driverRoutes = routes.filter(r => r.driver_id === d.id && r.status !== 'completed')
             return (
@@ -336,8 +336,7 @@ export default function DriversPage() {
                     {driverRoutes.length > 0 && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: '#E6F1FB', color: '#0C447C', fontWeight: 600 }}>{driverRoutes.length} active route{driverRoutes.length > 1 ? 's' : ''}</span>}
                   </div>
                   <div style={{ fontSize: 12, color: '#8a9aaa' }}>
-                    {d.license || 'No license'} · {millName(d.feed_mill_id)}
-                    {d.phone ? ' · ' + d.phone : ''}
+                    {d.license || 'No license'} · {millName(d.feed_mill_id)}{d.phone ? ' · ' + d.phone : ''}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -359,16 +358,15 @@ export default function DriversPage() {
         </div>
       )}
 
-      {/* FLEET VIEW */}
       {view === 'fleet' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {trucks.length === 0 ? (
+          {visTrucks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: '#8a9aaa' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🚛</div>
               <div style={{ fontSize: 15, fontWeight: 500, color: '#1a2530', marginBottom: 6 }}>No trucks yet</div>
               <button onClick={openNewTruck} style={{ background: '#4A90C4' }} className="btn-primary">+ Add first truck</button>
             </div>
-          ) : trucks.filter(t => !selectedMillId || t.feed_mill_id === selectedMillId).map(t => {
+          ) : visTrucks.map(t => {
             const assignedDriver = drivers.find(d => d.truck_id === t.id)
             const truckRoutes    = routes.filter(r => r.truck_id === t.id && r.status !== 'completed')
             return (
@@ -389,8 +387,7 @@ export default function DriversPage() {
                     {truckRoutes.length > 0 && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 8, background: '#E6F1FB', color: '#0C447C', fontWeight: 600 }}>{truckRoutes.length} active route{truckRoutes.length > 1 ? 's' : ''}</span>}
                   </div>
                   <div style={{ fontSize: 12, color: '#8a9aaa' }}>
-                    {(t.capacity_kg/1000).toFixed(0)}t capacity · {millName(t.feed_mill_id)}
-                    {assignedDriver ? ' · 👤 ' + assignedDriver.name : ' · No driver'}
+                    {(t.capacity_kg/1000).toFixed(0)}t capacity · {millName(t.feed_mill_id)}{assignedDriver ? ' · 👤 ' + assignedDriver.name : ' · No driver'}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
