@@ -68,7 +68,12 @@ export default function SidebarNav() {
 
   // If current farm is not in filtered list, reset it
   useEffect(() => {
-    if (selectedMillId && currentFarm && !(currentFarm as any).feed_mill_id !== selectedMillId) {
+    useEffect(() => {
+  if (selectedMillId && currentFarm) {
+    const stillValid = filteredFarms.find(f => f.id === currentFarm.id)
+    if (!stillValid && filteredFarms.length > 0) setCurrentFarm(filteredFarms[0])
+  }
+}, [selectedMillId])
       const stillValid = filteredFarms.find(f => f.id === currentFarm.id)
       if (!stillValid && filteredFarms.length > 0) setCurrentFarm(filteredFarms[0])
     }
