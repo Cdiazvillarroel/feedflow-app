@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useFarm } from './FarmContext'
+import { useFarm } from '@/app/dashboard/FarmContext'
 
 interface Alert {
   id: string; farm_id: string; silo_id: string | null; type: string; severity: string
