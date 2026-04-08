@@ -292,10 +292,10 @@ export default function DriversPage() {
 
       {/* SUMMARY */}
       <div className="summary-row">
-        <div className="sum-card"><div className="sum-label">Active drivers</div><div className="sum-val green">{drivers.filter(d => d.active).length}</div><div className="sum-sub">Available for routes</div></div>
-        <div className="sum-card"><div className="sum-label">Inactive</div><div className="sum-val" style={{ color: '#aab8c0' }}>{drivers.filter(d => !d.active).length}</div><div className="sum-sub">Drivers</div></div>
-        <div className="sum-card"><div className="sum-label">Active trucks</div><div className="sum-val" style={{ color: '#4A90C4' }}>{trucks.filter(t => t.active).length}</div><div className="sum-sub">Fleet vehicles</div></div>
-        <div className="sum-card"><div className="sum-label">Total capacity</div><div className="sum-val" style={{ color: '#4A90C4' }}>{(trucks.filter(t => t.active).reduce((sum, t) => sum + t.capacity_kg, 0) / 1000).toFixed(0)}t</div><div className="sum-sub">Active fleet</div></div>
+        <div className="sum-card"><div className="sum-label">Active drivers</div><div className="sum-val green">{drivers.filter(d => d.active && (!selectedMillId || d.feed_mill_id === selectedMillId)).length}</div>
+        <div className="sum-card"><div className="sum-label">Inactive</div><div className="sum-val" style={{ color: '#aab8c0' }}>{drivers.filter(d => !d.active && (!selectedMillId || d.feed_mill_id === selectedMillId)).length}</div><<div className="sum-sub">Drivers</div></div>
+        <div className="sum-card"><div className="sum-label">Active trucks</div><div className="sum-val" style={{ color: '#4A90C4' }}>{trucks.filter(t => t.active && (!selectedMillId || t.feed_mill_id === selectedMillId)).length}</div><div className="sum-sub">Fleet vehicles</div></div>
+        <div className="sum-card"><div className="sum-label">Total capacity</div><div className="sum-val" style={{ color: '#4A90C4' }}>{(trucks.filter(t => t.active && (!selectedMillId || t.feed_mill_id === selectedMillId)).reduce((sum, t) => sum + t.capacity_kg, 0) / 1000).toFixed(0)}t</div><div className="sum-sub">Active fleet</div></div>
       </div>
 
       {/* VIEW TOGGLE */}
