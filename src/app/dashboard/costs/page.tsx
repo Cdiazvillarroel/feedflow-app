@@ -7,23 +7,9 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
-interface FeedPrice   { id: string; material: string; price_per_tonne: number }
 interface AnimalGroup { id: string; name: string; type: string; count: number; icon: string | null }
-
-const RATIONS: Record<string, { material: string; kgPerHead: number }[]> = {
-  'Milking Herd':   [{ material: 'Dairy Mix',      kgPerHead: 10.0 }],
-  'Calves':         [{ material: 'Calf Feed',       kgPerHead: 3.0  }],
-  'Sows':           [{ material: 'Sow Lactation',   kgPerHead: 6.5  }],
-  'Piglets':        [{ material: 'Starter Feed',    kgPerHead: 0.5  }],
-  'Growers':        [{ material: 'Grower Feed',     kgPerHead: 1.5  }],
-  'Finishers':      [{ material: 'Finisher Feed',   kgPerHead: 2.5  }],
-  'Boars':          [{ material: 'Boar Feed',       kgPerHead: 2.5  }],
-  'Laying Hens':    [{ material: 'Layer Mash',      kgPerHead: 0.12 }, { material: 'Shell Grit', kgPerHead: 0.01 }],
-  'Pullets':        [{ material: 'Grower Feed',     kgPerHead: 0.08 }],
-  'Chicks':         [{ material: 'Chick Starter',   kgPerHead: 0.02 }],
-  'Broilers':       [{ material: 'Grower Feed',     kgPerHead: 0.10 }],
-  'Broiler Chicks': [{ material: 'Chick Starter',   kgPerHead: 0.04 }],
-}
+interface Feed        { id: string; name: string; material: string; kg_per_head_day: number; price_per_tonne: number | null; animal_type: string }
+interface FeedPrice   { id: string; material: string; price_per_tonne: number }
 
 const MATERIAL_COLORS: Record<string, string> = {
   'Dairy Mix': '#4CAF7D', 'Calf Feed': '#4A90C4', 'Protein Mix': '#EF9F27',
@@ -33,21 +19,14 @@ const MATERIAL_COLORS: Record<string, string> = {
   'Shell Grit': '#BDC3C7', 'Chick Starter': '#E67E22',
 }
 
-function getRations(groupName: string, groupType: string) {
-  if (RATIONS[groupName]) return RATIONS[groupName]
-  // Fallback by type
-  if (groupType === 'cattle') return [{ material: 'Dairy Mix', kgPerHead: 8.0 }]
-  if (groupType === 'pig')    return [{ material: 'Grower Feed', kgPerHead: 2.0 }]
-  if (groupType === 'poultry') return [{ material: 'Layer Mash', kgPerHead: 0.12 }]
-  return [{ material: 'Dairy Mix', kgPerHead: 5.0 }]
-}
-
 export default function CostsPage() {
   const { currentFarm } = useFarm()
   const farmId = currentFarm?.id || ''
 
-  const [prices,      setPrices]      = useState<FeedPrice[]>([])
   const [groups,      setGroups]      = useState<AnimalGroup[]>([])
+  const [feeds,       setFeeds]       = useState<Feed[]>([])
+  const [groupFeeds,  setGroupFeeds]  = useState<Record<string, string[]>>({})
+  const [prices,      setPrices]      = useState<FeedPrice[]>([])
   const [localPrices, setLocalPrices] = useState<Record<string, number>>({})
   const [loading,     setLoading]     = useState(true)
   const [saving,      setSaving]      = useState(false)
@@ -57,13 +36,22 @@ export default function CostsPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [pricesR, groupsR] = await Promise.all([
-      supabase.from('feed_prices').select('*').eq('farm_id', farmId).order('material'),
+    const [groupsR, feedsR, agfR, pricesR] = await Promise.all([
       supabase.from('animal_groups').select('*').eq('farm_id', farmId).order('name'),
+      supabase.from('feeds').select('id, name, material, kg_per_head_day, price_per_tonne, animal_type').eq('farm_id', farmId).eq('active', true),
+      supabase.from('animal_group_feeds').select('animal_group_id, feed_id'),
+      supabase.from('feed_prices').select('*').eq('farm_id', farmId).order('material'),
     ])
+    setGroups(groupsR.data || [])
+    setFeeds(feedsR.data || [])
+    const map: Record<string, string[]> = {}
+    ;(agfR.data || []).forEach(r => {
+      if (!map[r.animal_group_id]) map[r.animal_group_id] = []
+      map[r.animal_group_id].push(r.feed_id)
+    })
+    setGroupFeeds(map)
     const p = pricesR.data || []
     setPrices(p)
-    setGroups(groupsR.data || [])
     setLocalPrices(Object.fromEntries(p.map(x => [x.material, x.price_per_tonne])))
     setLoading(false)
   }
@@ -71,6 +59,8 @@ export default function CostsPage() {
   async function savePrice(material: string, price: number) {
     setSaving(true)
     await supabase.from('feed_prices').update({ price_per_tonne: price }).eq('farm_id', farmId).eq('material', material)
+    // Also update feeds table
+    await supabase.from('feeds').update({ price_per_tonne: price }).eq('farm_id', farmId).eq('material', material)
     setSaving(false); setSavedMsg('Saved')
     setTimeout(() => setSavedMsg(''), 2000)
   }
@@ -84,25 +74,38 @@ export default function CostsPage() {
     return localPrices[material] ?? prices.find(p => p.material === material)?.price_per_tonne ?? 420
   }
 
+  // Get feeds for a group — assigned feeds first, fallback to type match
+  function getGroupFeeds(g: AnimalGroup): Feed[] {
+    const assigned = groupFeeds[g.id] || []
+    if (assigned.length > 0) return feeds.filter(f => assigned.includes(f.id))
+    return feeds.filter(f => f.animal_type === g.type)
+  }
+
   function groupDailyFeed(g: AnimalGroup) {
-    return getRations(g.name, g.type).reduce((s, r) => s + r.kgPerHead * g.count, 0)
+    return getGroupFeeds(g).reduce((s, f) => s + f.kg_per_head_day * g.count, 0)
   }
 
   function groupDailyCost(g: AnimalGroup) {
-    return getRations(g.name, g.type).reduce((s, r) => s + r.kgPerHead * g.count / 1000 * getPrice(r.material), 0)
+    return getGroupFeeds(g).reduce((s, f) => {
+      const price = f.price_per_tonne || getPrice(f.material)
+      return s + f.kg_per_head_day * g.count / 1000 * price
+    }, 0)
   }
 
   const totalDaily   = groups.reduce((s, g) => s + groupDailyCost(g), 0)
   const totalAnimals = groups.reduce((s, g) => s + g.count, 0)
   const maxCost      = Math.max(...groups.map(g => groupDailyCost(g)), 1)
 
+  // Material costs from actual feed assignments
   const materialCosts: Record<string, number> = {}
-  groups.forEach(g => getRations(g.name, g.type).forEach(r => {
-    materialCosts[r.material] = (materialCosts[r.material] || 0) + r.kgPerHead * g.count / 1000 * getPrice(r.material)
-  }))
+  groups.forEach(g => {
+    getGroupFeeds(g).forEach(f => {
+      const price = f.price_per_tonne || getPrice(f.material)
+      materialCosts[f.material] = (materialCosts[f.material] || 0) + f.kg_per_head_day * g.count / 1000 * price
+    })
+  })
   const donutMaterials = Object.keys(materialCosts).filter(m => materialCosts[m] > 0)
   const totalMatCost   = Object.values(materialCosts).reduce((s, v) => s + v, 0)
-
   const barColor = (cpp: number) => cpp > 2.0 ? '#E24B4A' : cpp > 1.0 ? '#EF9F27' : '#4CAF7D'
 
   if (loading) return (
@@ -130,10 +133,11 @@ export default function CostsPage() {
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Monthly spend</div><div className="sum-val">${Math.round(totalDaily*30).toLocaleString()}</div><div className="sum-sub">At current rate</div></div>
         <div className="sum-card"><div className="sum-label">Daily spend</div><div className="sum-val">${Math.round(totalDaily).toLocaleString()}</div><div className="sum-sub">All groups</div></div>
-        <div className="sum-card"><div className="sum-label">Cost / animal / day</div><div className="sum-val green">${totalAnimals > 0 ? (totalDaily/totalAnimals).toFixed(2) : '0.00'}</div><div className="sum-sub">{totalAnimals.toLocaleString()} animals</div></div>
+        <div className="sum-card"><div className="sum-label">Cost / animal / day</div><div className="sum-val green">${totalAnimals > 0 ? (totalDaily/totalAnimals).toFixed(3) : '0.00'}</div><div className="sum-sub">{totalAnimals.toLocaleString()} animals</div></div>
         <div className="sum-card"><div className="sum-label">Annual projection</div><div className="sum-val">${Math.round(totalDaily*365/1000)}k</div><div className="sum-sub">At current prices</div></div>
       </div>
 
+      {/* Feed prices */}
       <div className="card">
         <div className="card-header">
           <div className="card-title">Feed prices — edit to update all calculations</div>
@@ -164,15 +168,19 @@ export default function CostsPage() {
         )}
       </div>
 
+      {/* Cost per group */}
       <div className="grid-2">
         <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header"><div className="card-title">Cost per group</div><span style={{ fontSize: 11, color: '#aab8c0' }}>Edit counts to recalculate</span></div>
+          <div className="card-header">
+            <div className="card-title">Cost per group</div>
+            <span style={{ fontSize: 11, color: '#aab8c0' }}>Based on Feed Library assignments</span>
+          </div>
           {groups.length === 0 ? (
             <div style={{ color: '#8a9aaa', fontSize: 13 }}>No animal groups found for this farm.</div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr>{['Group', 'Count', 'Feed/day', '$/head/day', 'Daily cost', '30 days'].map(h => (
+                <tr>{['Group', 'Count', 'Feeds', 'Feed/day', '$/head/day', 'Daily cost', '30 days'].map(h => (
                   <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>
                 ))}</tr>
               </thead>
@@ -181,6 +189,8 @@ export default function CostsPage() {
                   const cost = groupDailyCost(g)
                   const feed = groupDailyFeed(g)
                   const cpp  = g.count > 0 ? cost / g.count : 0
+                  const gf   = getGroupFeeds(g)
+                  const fromLibrary = (groupFeeds[g.id] || []).length > 0
                   return (
                     <tr key={g.id}>
                       <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
@@ -197,6 +207,14 @@ export default function CostsPage() {
                           onBlur={e => saveCount(g.id, Number(e.target.value))}
                           step={10}
                           style={{ border: '0.5px solid #e8ede9', borderRadius: 4, padding: '4px 8px', fontSize: 12, color: '#1a2530', background: '#f7f9f8', width: 68, fontFamily: 'inherit', textAlign: 'center' }} />
+                      </td>
+                      <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
+                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                          {gf.slice(0, 2).map(f => (
+                            <span key={f.id} style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: (MATERIAL_COLORS[f.material] || '#aab8c0') + '22', color: MATERIAL_COLORS[f.material] || '#aab8c0', fontWeight: 600 }}>{f.material}</span>
+                          ))}
+                          {!fromLibrary && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: '#FAEEDA', color: '#633806', fontWeight: 600 }}>auto</span>}
+                        </div>
                       </td>
                       <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa' }}>{Math.round(feed).toLocaleString()} kg</td>
                       <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, fontWeight: 600, color: '#27500A' }}>${cpp.toFixed(3)}</td>
@@ -243,18 +261,19 @@ export default function CostsPage() {
               })}
             </>
           ) : (
-            <div style={{ color: '#8a9aaa', fontSize: 13 }}>Configure feed prices and animal groups to see cost breakdown.</div>
+            <div style={{ color: '#8a9aaa', fontSize: 13 }}>Assign feeds to animal groups to see cost breakdown.</div>
           )}
         </div>
       </div>
 
+      {/* Cost projections */}
       <div className="card">
         <div className="card-header"><div className="card-title">Cost projections</div></div>
         <div className="grid-3" style={{ marginBottom: 0 }}>
           {[
-            { label: 'This month',        val: Math.round(totalDaily*30),      sub: 'At current rate'            },
-            { label: 'Next month est.',   val: Math.round(totalDaily*30*1.05), sub: '+5% seasonal adjustment'    },
-            { label: 'Annual projection', val: Math.round(totalDaily*365),     sub: 'At flat current rate'       },
+            { label: 'This month',        val: Math.round(totalDaily*30),      sub: 'At current rate'         },
+            { label: 'Next month est.',   val: Math.round(totalDaily*30*1.05), sub: '+5% seasonal adjustment' },
+            { label: 'Annual projection', val: Math.round(totalDaily*365),     sub: 'At flat current rate'    },
           ].map(p => (
             <div key={p.label} style={{ background: '#f7f9f8', borderRadius: 10, padding: '16px 18px' }}>
               <div style={{ fontSize: 11, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>{p.label}</div>
