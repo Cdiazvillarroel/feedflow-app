@@ -11,7 +11,8 @@ interface Alert {
 
 interface AlarmRule {
   id: string; farm_id: string; silo_id: string | null; name: string
-  trigger_type: string; threshold_pct: number; channel: string; active: boolean; created_at: string
+  trigger_type: string; threshold_pct: number; channel: string
+  contact_ids: string[]; active: boolean; created_at: string
 }
 
 interface Contact {
@@ -23,10 +24,10 @@ interface Silo { id: string; name: string; farm_id: string }
 interface Farm { id: string; name: string }
 
 const TRIGGER_TYPES = [
-  { value: 'level_below',    label: 'Level below threshold'  },
-  { value: 'level_above',    label: 'Level above threshold'  },
-  { value: 'sensor_offline', label: 'Sensor offline'         },
-  { value: 'no_reading',     label: 'No reading received'    },
+  { value: 'level_below',    label: 'Level below threshold' },
+  { value: 'level_above',    label: 'Level above threshold' },
+  { value: 'sensor_offline', label: 'Sensor offline'        },
+  { value: 'no_reading',     label: 'No reading received'   },
 ]
 
 const SEVERITIES = [
@@ -37,9 +38,9 @@ const SEVERITIES = [
 ]
 
 const CHANNELS = [
-  { value: 'email',    label: 'Email'    },
-  { value: 'sms',      label: 'SMS'      },
-  { value: 'push',     label: 'Push'     },
+  { value: 'email', label: 'Email' },
+  { value: 'sms',   label: 'SMS'   },
+  { value: 'push',  label: 'Push'  },
 ]
 
 function iStyle(full = false): React.CSSProperties {
@@ -71,7 +72,7 @@ export default function AlertsPage() {
 
   const emptyRule = {
     name: '', farm_id: farmId, silo_id: '', trigger_type: 'level_below',
-    threshold_pct: '20', channel: 'email', active: true,
+    threshold_pct: '20', channel: 'email', active: true, contact_ids: [] as string[],
   }
   const emptyContact = {
     name: '', position: '', phone: '', email: '', telegram_id: '', farm_id: farmId, active: true,
@@ -103,14 +104,27 @@ export default function AlertsPage() {
 
   function openNewRule() { setRuleForm({ ...emptyRule, farm_id: farmId }); setDrawer('new') }
   function openEditRule(r: AlarmRule) {
-    setRuleForm({ name: r.name, farm_id: r.farm_id, silo_id: r.silo_id || '', trigger_type: r.trigger_type, threshold_pct: r.threshold_pct.toString(), channel: r.channel, active: r.active })
+    setRuleForm({
+      name: r.name, farm_id: r.farm_id, silo_id: r.silo_id || '',
+      trigger_type: r.trigger_type, threshold_pct: r.threshold_pct.toString(),
+      channel: r.channel, active: r.active, contact_ids: r.contact_ids || [],
+    })
     setDrawer(r)
   }
 
   async function saveRule() {
     if (!ruleForm.name.trim()) return
     setSaving(true)
-    const payload = { farm_id: ruleForm.farm_id || farmId, silo_id: ruleForm.silo_id || null, name: ruleForm.name.trim(), trigger_type: ruleForm.trigger_type, threshold_pct: parseFloat(ruleForm.threshold_pct) || 0, channel: ruleForm.channel, active: ruleForm.active }
+    const payload = {
+      farm_id: ruleForm.farm_id || farmId,
+      silo_id: ruleForm.silo_id || null,
+      name: ruleForm.name.trim(),
+      trigger_type: ruleForm.trigger_type,
+      threshold_pct: parseFloat(ruleForm.threshold_pct) || 0,
+      channel: ruleForm.channel,
+      active: ruleForm.active,
+      contact_ids: ruleForm.contact_ids,
+    }
     if (drawer && drawer !== 'new') {
       await supabase.from('alarm_rules').update(payload).eq('id', (drawer as AlarmRule).id)
       showMsg('Rule updated')
@@ -169,14 +183,14 @@ export default function AlertsPage() {
     setAlerts(prev => prev.map(a => ({ ...a, acknowledged: true })))
   }
 
-  const unread    = alerts.filter(a => !a.acknowledged).length
-  const filtered  = filter === 'all' ? alerts : alerts.filter(a => a.type === filter)
-  const siloName  = (id: string | null) => id ? silos.find(s => s.id === id)?.name || '—' : 'All silos'
-  const farmName  = (id: string) => farms.find(f => f.id === id)?.name || '—'
-  const sevInfo   = (s: string) => SEVERITIES.find(x => x.value === s) || SEVERITIES[1]
-  const bgColor   = (type: string) => type === 'critical' ? '#FCEBEB' : type === 'warning' ? '#FAEEDA' : '#f7f9f8'
-  const iconColor = (type: string) => type === 'critical' ? '#A32D2D' : type === 'warning' ? '#633806' : '#aab8c0'
+  const unread       = alerts.filter(a => !a.acknowledged).length
+  const filtered     = filter === 'all' ? alerts : alerts.filter(a => a.type === filter)
+  const siloName     = (id: string | null) => id ? silos.find(s => s.id === id)?.name || '—' : 'All silos'
+  const sevInfo      = (s: string) => SEVERITIES.find(x => x.value === s) || SEVERITIES[1]
+  const bgColor      = (type: string) => type === 'critical' ? '#FCEBEB' : type === 'warning' ? '#FAEEDA' : '#f7f9f8'
+  const iconColor    = (type: string) => type === 'critical' ? '#A32D2D' : type === 'warning' ? '#633806' : '#aab8c0'
   const triggerLabel = (t: string) => TRIGGER_TYPES.find(x => x.value === t)?.label || t
+  const contactName  = (id: string) => contacts.find(c => c.id === id)?.name || '—'
   const isEditingRule    = drawer && drawer !== 'new'
   const isEditingContact = contactDrawer && contactDrawer !== 'new'
 
@@ -195,7 +209,7 @@ export default function AlertsPage() {
       {drawer && (
         <>
           <div onClick={() => setDrawer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }} />
-          <div style={{ position: 'fixed', top: 0, right: 0, width: 460, height: '100vh', background: '#fff', zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)' }}>
+          <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)' }}>
             <div style={{ padding: '20px 24px', borderBottom: '0.5px solid #e8ede9', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eaf5ee', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF7D" strokeWidth="1.5" strokeLinecap="round">
@@ -211,20 +225,9 @@ export default function AlertsPage() {
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               <SectionTitle title="Rule details" />
-              <div><label style={lStyle()}>Rule name *</label>
-                <input value={ruleForm.name} onChange={e => setRuleForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Critical level alert" style={iStyle(true)} />
-              </div>
-
               <div>
-                <label style={lStyle()}>Severity</label>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {SEVERITIES.map(s => (
-                    <button key={s.value} onClick={() => {}}
-                      style={{ flex: 1, padding: '7px 4px', borderRadius: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: '0.5px solid #e8ede9', background: '#fff', color: '#8a9aaa' }}>
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
+                <label style={lStyle()}>Rule name *</label>
+                <input value={ruleForm.name} onChange={e => setRuleForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Critical level alert" style={iStyle(true)} />
               </div>
 
               <SectionTitle title="Trigger" />
@@ -242,7 +245,8 @@ export default function AlertsPage() {
                 </select>
               </div>
               {(ruleForm.trigger_type === 'level_below' || ruleForm.trigger_type === 'level_above') && (
-                <div><label style={lStyle()}>Threshold (%)</label>
+                <div>
+                  <label style={lStyle()}>Threshold (%)</label>
                   <input type="number" value={ruleForm.threshold_pct} onChange={e => setRuleForm(p => ({ ...p, threshold_pct: e.target.value }))} placeholder="e.g. 20" style={iStyle(true)} min="0" max="100" />
                 </div>
               )}
@@ -258,6 +262,47 @@ export default function AlertsPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={lStyle()}>Notify contacts</label>
+                  <span style={{ fontSize: 11, color: '#aab8c0' }}>{contacts.length} available</span>
+                </div>
+                {contacts.length === 0 ? (
+                  <div style={{ fontSize: 12, color: '#aab8c0', padding: '12px', background: '#f7f9f8', borderRadius: 8, textAlign: 'center' }}>
+                    No contacts for this farm. Add them in the Contacts tab.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {contacts.map(c => {
+                      const checked = ruleForm.contact_ids.includes(c.id)
+                      return (
+                        <label key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, border: '0.5px solid ' + (checked ? '#4CAF7D' : '#e8ede9'), background: checked ? '#f4fbf7' : '#fff', cursor: 'pointer' }}>
+                          <input type="checkbox" checked={checked}
+                            onChange={() => setRuleForm(p => ({
+                              ...p,
+                              contact_ids: checked
+                                ? p.contact_ids.filter(id => id !== c.id)
+                                : [...p.contact_ids, c.id]
+                            }))}
+                            style={{ accentColor: '#4CAF7D', width: 14, height: 14 }} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: checked ? 600 : 400, color: '#1a2530' }}>{c.name}</div>
+                            <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>
+                              {[c.position, c.email, c.telegram_id ? 'Telegram: ' + c.telegram_id : null].filter(Boolean).join(' · ')}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {c.email       && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: '#E6F1FB', color: '#0C447C', fontWeight: 600 }}>EMAIL</span>}
+                            {c.telegram_id && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: '#eaf5ee', color: '#27500A', fontWeight: 600 }}>TG</span>}
+                            {c.phone       && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: '#f0f4f0', color: '#6a7a8a', fontWeight: 600 }}>PHONE</span>}
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', padding: '12px 14px', borderRadius: 8, border: '0.5px solid ' + (ruleForm.active ? '#4CAF7D' : '#e8ede9'), background: ruleForm.active ? '#f4fbf7' : '#fff' }}>
@@ -351,9 +396,9 @@ export default function AlertsPage() {
       {/* TABS */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '0.5px solid #e8ede9' }}>
         {[
-          { key: 'alerts',   label: 'Alerts (' + alerts.length + ')'    },
-          { key: 'rules',    label: 'Alarm rules (' + rules.length + ')' },
-          { key: 'contacts', label: 'Contacts (' + contacts.length + ')'},
+          { key: 'alerts',   label: 'Alerts (' + alerts.length + ')'     },
+          { key: 'rules',    label: 'Alarm rules (' + rules.length + ')'  },
+          { key: 'contacts', label: 'Contacts (' + contacts.length + ')' },
         ].map(v => (
           <button key={v.key} onClick={() => setView(v.key as any)}
             style={{ padding: '9px 18px', fontSize: 13, fontWeight: view === v.key ? 600 : 400, cursor: 'pointer', border: 'none', background: 'transparent', fontFamily: 'inherit', color: view === v.key ? '#1a2530' : '#8a9aaa', borderBottom: view === v.key ? '2px solid #4CAF7D' : '2px solid transparent', marginBottom: -1 }}>
@@ -435,6 +480,15 @@ export default function AlertsPage() {
                   {r.silo_id ? ' · ' + siloName(r.silo_id) : ' · All silos'}
                   {' · ' + r.channel}
                 </div>
+                {r.contact_ids && r.contact_ids.length > 0 && (
+                  <div style={{ display: 'flex', gap: 4, marginTop: 5, flexWrap: 'wrap' }}>
+                    {r.contact_ids.map(id => (
+                      <span key={id} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: '#f0f4f0', color: '#6a7a8a', fontWeight: 600 }}>
+                        👤 {contactName(id)}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={e => e.stopPropagation()}>
                 <button onClick={() => toggleRule(r.id, !r.active)}
