@@ -98,7 +98,14 @@ export default function DatabasePage() {
       setSqlLoading(false)
       return
     }
-    const { data, error } = await supabase.rpc('exec_sql', { query: sqlQuery }).catch(() => ({ data: null, error: { message: 'SQL execution not available. Use the table editor instead.' } }))
+    let data = null, error: any = null
+    try {
+    const result = await supabase.rpc('exec_sql', { query: sqlQuery })
+    data  = result.data
+    error = result.error
+    } catch {
+    error = { message: 'SQL execution not available. Use the table editor instead.' }
+    }
     const duration = Date.now() - start
     setSqlResult({ data, error: error?.message, duration })
     setSqlLoading(false)
