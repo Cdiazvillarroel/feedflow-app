@@ -12,10 +12,11 @@ const navItems = [
   { href: '/dashboard',           label: 'Dashboard',   icon: 'grid' },
   { href: '/dashboard/alerts',    label: 'Alerts',      icon: 'bell', badge: true },
   { href: '/dashboard/analytics', label: 'Analytics',   icon: 'activity' },
+  { href: '/dashboard/forecast',  label: 'Forecast',    icon: 'trending' },
   { href: '/dashboard/insights',  label: 'AI Insights', icon: 'ai' },
   { href: '/dashboard/map',       label: 'Map view',    icon: 'map' },
+ 
   { section: 'Manage' },
-  { href: '/dashboard/forecast',  label: 'Forecast',    icon: 'trending' },
   { href: '/dashboard/feeds',     label: 'Feed library', icon: 'grain'  },
   { href: '/dashboard/costs',     label: 'Feed costs',   icon: 'dollar' },
   { href: '/dashboard/animals',   label: 'Animals',     icon: 'users' },
