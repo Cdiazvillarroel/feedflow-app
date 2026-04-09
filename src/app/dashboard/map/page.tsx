@@ -91,7 +91,7 @@ export default function MapPage() {
       mapInstanceRef.current = new G.Map(mapRef.current, {
         center: { lat: centerLat, lng: centerLng },
         zoom: 16,
-        mapTypeId: 'satellite',
+        mapTypeId: 'roadmap',
         mapTypeControl: true,
         streetViewControl: false,
         fullscreenControl: true,
