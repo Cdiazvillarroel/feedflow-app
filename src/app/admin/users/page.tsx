@@ -67,7 +67,7 @@ export default function AdminUsersPage() {
     ])]
 
     // Use client_users joined with auth info via a custom approach
-    const { data: authUsersData } = await supabase.rpc('get_users_info').catch(() => ({ data: null }))
+    const { data: authUsersData, error: rpcError } = await supabase.rpc('get_users_info')
 
     if (authUsersData) {
       const mapped: AppUser[] = (authUsersData || []).map((u: any) => ({
