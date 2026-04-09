@@ -31,7 +31,7 @@ export default function AnimalsPage() {
 
   const [groups,        setGroups]        = useState<AnimalGroup[]>([])
   const [feeds,         setFeeds]         = useState<Feed[]>([])
-  const [groupFeeds,    setGroupFeeds]    = useState<Record<string, string[]>>({})  // groupId → feedIds
+  const [groupFeeds,    setGroupFeeds]    = useState<Record<string, string[]>>({})
   const [selectedId,    setSelectedId]    = useState<string | null>(null)
   const [loading,       setLoading]       = useState(true)
   const [saving,        setSaving]        = useState(false)
@@ -54,7 +54,6 @@ export default function AnimalsPage() {
     const g = groupsR.data || []
     setGroups(g)
     setFeeds(feedsR.data || [])
-    // Build groupFeeds map
     const map: Record<string, string[]> = {}
     ;(agfR.data || []).forEach(r => {
       if (!map[r.animal_group_id]) map[r.animal_group_id] = []
@@ -94,13 +93,12 @@ export default function AnimalsPage() {
       groupId = data?.id || ''
       showMsg('Group created')
     }
-    // Save feed assignments
     if (groupId) {
       await supabase.from('animal_group_feeds').delete().eq('animal_group_id', groupId)
       if (selectedFeeds.length > 0) {
-        const feed = feeds.filter(f => selectedFeeds.includes(f.id))
+        const selectedFeedData = feeds.filter(f => selectedFeeds.includes(f.id))
         await supabase.from('animal_group_feeds').insert(
-          feed.map(f => ({ animal_group_id: groupId, feed_id: f.id, kg_per_head_day: f.kg_per_head_day }))
+          selectedFeedData.map(f => ({ animal_group_id: groupId, feed_id: f.id, kg_per_head_day: f.kg_per_head_day }))
         )
       }
     }
@@ -121,16 +119,15 @@ export default function AnimalsPage() {
     setGroups(prev => prev.map(x => x.id === g.id ? { ...x, count } : x))
   }
 
-  // Get feeds assigned to a group, falling back to feeds matching animal type
   function getGroupFeeds(g: AnimalGroup): Feed[] {
     const assigned = groupFeeds[g.id] || []
     if (assigned.length > 0) return feeds.filter(f => assigned.includes(f.id))
     return feeds.filter(f => f.animal_type === g.type)
   }
 
-  function dailyFeed(g: AnimalGroup)  { return getGroupFeeds(g).reduce((s, f) => s + f.kg_per_head_day * g.count, 0) }
-  function dailyCost(g: AnimalGroup)  { return getGroupFeeds(g).reduce((s, f) => s + f.kg_per_head_day * g.count / 1000 * (f.price_per_tonne || 420), 0) }
-  function costPerHead(g: AnimalGroup){ return g.count > 0 ? dailyCost(g) / g.count : 0 }
+  function dailyFeed(g: AnimalGroup)      { return getGroupFeeds(g).reduce((s, f) => s + f.kg_per_head_day * g.count, 0) }
+  function dailyCost(g: AnimalGroup)      { return getGroupFeeds(g).reduce((s, f) => s + f.kg_per_head_day * g.count / 1000 * (f.price_per_tonne || 420), 0) }
+  function costPerHead(g: AnimalGroup)    { return g.count > 0 ? dailyCost(g) / g.count : 0 }
   function kgPerHeadTotal(g: AnimalGroup) { return getGroupFeeds(g).reduce((s, f) => s + f.kg_per_head_day, 0) }
 
   const selected     = groups.find(g => g.id === selectedId) || groups[0]
@@ -144,9 +141,8 @@ export default function AnimalsPage() {
     type === 'sheep'   ? { bg: '#f0f4f0', color: '#6a7a8a', label: 'Sheep'   } :
                          { bg: '#E6F1FB', color: '#0C447C', label: 'Cattle'  }
 
-  const isEditing     = drawer && drawer !== 'new'
-  const drawerType    = form.type
-  const availableFeeds = feeds.filter(f => f.animal_type === drawerType)
+  const isEditing      = drawer && drawer !== 'new'
+  const availableFeeds = feeds.filter(f => f.animal_type === form.type)
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#8a9aaa', fontSize: 14 }}>
@@ -163,7 +159,7 @@ export default function AnimalsPage() {
       {drawer && (
         <>
           <div onClick={() => setDrawer(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 200 }} />
-          <div style={{ position: 'fixed', top: 0, right: 0, width: 460, height: '100vh', background: '#fff', zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)' }}>
+          <div style={{ position: 'fixed', top: 0, right: 0, width: 480, height: '100vh', background: '#fff', zIndex: 201, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 24px rgba(0,0,0,0.12)' }}>
             <div style={{ padding: '20px 24px', borderBottom: '0.5px solid #e8ede9', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eaf5ee', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
                 {form.icon || ICONS[form.type] || '🐾'}
@@ -177,11 +173,11 @@ export default function AnimalsPage() {
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-              {/* Basic info */}
               <div>
                 <label style={lStyle()}>Group name *</label>
                 <input style={iStyle(true)} value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Milking Herd" />
               </div>
+
               <div>
                 <label style={lStyle()}>Animal type *</label>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -193,10 +189,12 @@ export default function AnimalsPage() {
                   ))}
                 </div>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div>
                   <label style={lStyle()}>Icon (emoji)</label>
                   <input style={iStyle(true)} value={form.icon} onChange={e => setForm(p => ({ ...p, icon: e.target.value }))} placeholder="🐄" maxLength={4} />
+                  <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 4 }}>Leave blank for default</div>
                 </div>
                 <div>
                   <label style={lStyle()}>Animal count</label>
@@ -208,11 +206,11 @@ export default function AnimalsPage() {
               <div style={{ borderTop: '0.5px solid #e8ede9', paddingTop: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <label style={lStyle()}>Assign feeds</label>
-                  <span style={{ fontSize: 11, color: '#aab8c0' }}>{availableFeeds.length} available for {drawerType}</span>
+                  <span style={{ fontSize: 11, color: '#aab8c0' }}>{availableFeeds.length} available for {form.type}</span>
                 </div>
                 {availableFeeds.length === 0 ? (
-                  <div style={{ fontSize: 12, color: '#aab8c0', padding: '10px', background: '#f7f9f8', borderRadius: 8, textAlign: 'center' }}>
-                    No feeds for {drawerType}. Add feeds in the Feed Library module.
+                  <div style={{ fontSize: 12, color: '#aab8c0', padding: '12px', background: '#f7f9f8', borderRadius: 8, textAlign: 'center' }}>
+                    No feeds found for {form.type}. Add feeds in the Feed Library module.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -227,7 +225,9 @@ export default function AnimalsPage() {
                           <div style={{ width: 8, height: 8, borderRadius: '50%', background: mc, flexShrink: 0 }} />
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 13, fontWeight: checked ? 600 : 400, color: '#1a2530' }}>{f.name}</div>
-                            <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>{f.material} · {f.kg_per_head_day} kg/head/day{f.price_per_tonne ? ' · $' + f.price_per_tonne + '/t' : ''}</div>
+                            <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>
+                              {f.material} · {f.kg_per_head_day} kg/head/day{f.price_per_tonne ? ' · $' + f.price_per_tonne + '/t' : ''}
+                            </div>
                           </div>
                           {checked && f.price_per_tonne && (
                             <span style={{ fontSize: 11, color: '#4CAF7D', fontWeight: 600, flexShrink: 0 }}>
@@ -331,7 +331,7 @@ export default function AnimalsPage() {
                   </div>
                   {gf.length > 0 && (
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-                      {gf.slice(0,3).map(f => (
+                      {gf.slice(0, 3).map(f => (
                         <span key={f.id} style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: (MATERIAL_COLORS[f.material] || '#aab8c0') + '22', color: MATERIAL_COLORS[f.material] || '#aab8c0', fontWeight: 600 }}>{f.material}</span>
                       ))}
                     </div>
