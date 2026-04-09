@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { getAnimalGroups, getFeedPrices, updateAnimalCount } from '@/lib/queries'
-import type { AnimalGroup, FeedPrice } from '@/lib/types'
+import { supabase } from '@/lib/supabase'
+import { useFarm } from '@/app/dashboard/FarmContext'
 
 const RATIONS: Record<string, { material: string; kgPerHead: number; color: string }[]> = {
   'Sows lactating':  [{ material: 'Lactation diet', kgPerHead: 6.5, color: '#4CAF7D' }],
