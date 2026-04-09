@@ -36,7 +36,7 @@ export default function MapPage() {
     window.initGoogleMap = () => setMapReady(true)
     const script = document.createElement('script')
     script.id  = 'gmap-script'
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&callback=initGoogleMap`
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&callback=initGoogleMap&loading=async`
     script.async = true
     document.head.appendChild(script)
   }, [])
