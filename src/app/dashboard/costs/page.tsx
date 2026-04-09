@@ -1,36 +1,51 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { getFeedPrices, getAnimalGroups, updateFeedPrice, updateAnimalCount, getActiveFarmId } from '@/lib/queries'
-import type { FeedPrice, AnimalGroup } from '@/lib/types'
+import { supabase } from '@/lib/supabase'
+import { useFarm } from '@/app/dashboard/FarmContext'
 import { Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 
+interface FeedPrice   { id: string; material: string; price_per_tonne: number }
+interface AnimalGroup { id: string; name: string; type: string; count: number; icon: string | null }
+
 const RATIONS: Record<string, { material: string; kgPerHead: number }[]> = {
-  'Sows lactating':  [{ material: 'Lactation diet', kgPerHead: 6.5 }],
-  'Sows gestating':  [{ material: 'Gestation diet', kgPerHead: 2.5 }],
-  'Gilt developers': [{ material: 'Gestation diet', kgPerHead: 2.0 }],
-  'Lactating sows':  [{ material: 'Lactation diet', kgPerHead: 6.5 }],
-  'Gestating sows':  [{ material: 'Gestation diet', kgPerHead: 2.5 }],
-  'Grower pigs':     [{ material: 'Lactation diet', kgPerHead: 2.4 }],
-  'Sow herd':        [{ material: 'Lactation diet', kgPerHead: 5.5 }],
-  'Weaners':         [{ material: 'Lactation diet', kgPerHead: 0.4 }],
-  'Broilers':        [{ material: 'Wheat bran',     kgPerHead: 0.18 }],
-  'Beef cattle':     [{ material: 'Barley',         kgPerHead: 8.2 }],
+  'Milking Herd':   [{ material: 'Dairy Mix',      kgPerHead: 10.0 }],
+  'Calves':         [{ material: 'Calf Feed',       kgPerHead: 3.0  }],
+  'Sows':           [{ material: 'Sow Lactation',   kgPerHead: 6.5  }],
+  'Piglets':        [{ material: 'Starter Feed',    kgPerHead: 0.5  }],
+  'Growers':        [{ material: 'Grower Feed',     kgPerHead: 1.5  }],
+  'Finishers':      [{ material: 'Finisher Feed',   kgPerHead: 2.5  }],
+  'Boars':          [{ material: 'Boar Feed',       kgPerHead: 2.5  }],
+  'Laying Hens':    [{ material: 'Layer Mash',      kgPerHead: 0.12 }, { material: 'Shell Grit', kgPerHead: 0.01 }],
+  'Pullets':        [{ material: 'Grower Feed',     kgPerHead: 0.08 }],
+  'Chicks':         [{ material: 'Chick Starter',   kgPerHead: 0.02 }],
+  'Broilers':       [{ material: 'Grower Feed',     kgPerHead: 0.10 }],
+  'Broiler Chicks': [{ material: 'Chick Starter',   kgPerHead: 0.04 }],
 }
 
 const MATERIAL_COLORS: Record<string, string> = {
-  'Lactation diet': '#4CAF7D', 'Gestation diet': '#4A90C4',
-  'Maize meal': '#4CAF7D', 'Wheat bran': '#4A90C4',
-  'Soybean meal': '#EF9F27', 'Barley': '#E24B4A',
+  'Dairy Mix': '#4CAF7D', 'Calf Feed': '#4A90C4', 'Protein Mix': '#EF9F27',
+  'Barley': '#E24B4A', 'Wheat': '#9B59B6', 'Canola Meal': '#1ABC9C',
+  'Starter Feed': '#F39C12', 'Grower Feed': '#2ECC71', 'Finisher Feed': '#E74C3C',
+  'Sow Lactation': '#3498DB', 'Boar Feed': '#95A5A6', 'Layer Mash': '#F1C40F',
+  'Shell Grit': '#BDC3C7', 'Chick Starter': '#E67E22',
 }
 
-function getRations(groupName: string) {
-  return RATIONS[groupName] || [{ material: 'Lactation diet', kgPerHead: 3.0 }]
+function getRations(groupName: string, groupType: string) {
+  if (RATIONS[groupName]) return RATIONS[groupName]
+  // Fallback by type
+  if (groupType === 'cattle') return [{ material: 'Dairy Mix', kgPerHead: 8.0 }]
+  if (groupType === 'pig')    return [{ material: 'Grower Feed', kgPerHead: 2.0 }]
+  if (groupType === 'poultry') return [{ material: 'Layer Mash', kgPerHead: 0.12 }]
+  return [{ material: 'Dairy Mix', kgPerHead: 5.0 }]
 }
 
 export default function CostsPage() {
+  const { currentFarm } = useFarm()
+  const farmId = currentFarm?.id || ''
+
   const [prices,      setPrices]      = useState<FeedPrice[]>([])
   const [groups,      setGroups]      = useState<AnimalGroup[]>([])
   const [localPrices, setLocalPrices] = useState<Record<string, number>>({})
@@ -38,46 +53,57 @@ export default function CostsPage() {
   const [saving,      setSaving]      = useState(false)
   const [savedMsg,    setSavedMsg]    = useState('')
 
-  useEffect(() => {
-    Promise.all([getFeedPrices(), getAnimalGroups()]).then(([p, g]) => {
-      setPrices(p); setGroups(g)
-      setLocalPrices(Object.fromEntries(p.map(x => [x.material, x.price_per_tonne])))
-      setLoading(false)
-    })
-  }, [])
+  useEffect(() => { if (farmId) loadAll() }, [farmId])
+
+  async function loadAll() {
+    setLoading(true)
+    const [pricesR, groupsR] = await Promise.all([
+      supabase.from('feed_prices').select('*').eq('farm_id', farmId).order('material'),
+      supabase.from('animal_groups').select('*').eq('farm_id', farmId).order('name'),
+    ])
+    const p = pricesR.data || []
+    setPrices(p)
+    setGroups(groupsR.data || [])
+    setLocalPrices(Object.fromEntries(p.map(x => [x.material, x.price_per_tonne])))
+    setLoading(false)
+  }
 
   async function savePrice(material: string, price: number) {
     setSaving(true)
-    await updateFeedPrice(getActiveFarmId(), material, price)
+    await supabase.from('feed_prices').update({ price_per_tonne: price }).eq('farm_id', farmId).eq('material', material)
     setSaving(false); setSavedMsg('Saved')
     setTimeout(() => setSavedMsg(''), 2000)
   }
 
   async function saveCount(groupId: string, count: number) {
-    await updateAnimalCount(groupId, count)
+    await supabase.from('animal_groups').update({ count }).eq('id', groupId)
     setGroups(prev => prev.map(g => g.id === groupId ? { ...g, count } : g))
   }
 
-  function groupDailyFeed(g: AnimalGroup) { return getRations(g.name).reduce((s, r) => s + r.kgPerHead * g.count, 0) }
+  function getPrice(material: string) {
+    return localPrices[material] ?? prices.find(p => p.material === material)?.price_per_tonne ?? 420
+  }
+
+  function groupDailyFeed(g: AnimalGroup) {
+    return getRations(g.name, g.type).reduce((s, r) => s + r.kgPerHead * g.count, 0)
+  }
+
   function groupDailyCost(g: AnimalGroup) {
-    return getRations(g.name).reduce((s, r) => {
-      const price = localPrices[r.material] ?? prices.find(p => p.material === r.material)?.price_per_tonne ?? 520
-      return s + r.kgPerHead * g.count / 1000 * price
-    }, 0)
+    return getRations(g.name, g.type).reduce((s, r) => s + r.kgPerHead * g.count / 1000 * getPrice(r.material), 0)
   }
 
   const totalDaily   = groups.reduce((s, g) => s + groupDailyCost(g), 0)
   const totalAnimals = groups.reduce((s, g) => s + g.count, 0)
   const maxCost      = Math.max(...groups.map(g => groupDailyCost(g)), 1)
-  const barColor     = (cpp: number) => cpp > 2.0 ? '#E24B4A' : cpp > 1.0 ? '#EF9F27' : '#4CAF7D'
 
   const materialCosts: Record<string, number> = {}
-  groups.forEach(g => getRations(g.name).forEach(r => {
-    const price = localPrices[r.material] ?? prices.find(p => p.material === r.material)?.price_per_tonne ?? 520
-    materialCosts[r.material] = (materialCosts[r.material] || 0) + r.kgPerHead * g.count / 1000 * price
+  groups.forEach(g => getRations(g.name, g.type).forEach(r => {
+    materialCosts[r.material] = (materialCosts[r.material] || 0) + r.kgPerHead * g.count / 1000 * getPrice(r.material)
   }))
   const donutMaterials = Object.keys(materialCosts).filter(m => materialCosts[m] > 0)
   const totalMatCost   = Object.values(materialCosts).reduce((s, v) => s + v, 0)
+
+  const barColor = (cpp: number) => cpp > 2.0 ? '#E24B4A' : cpp > 1.0 ? '#EF9F27' : '#4CAF7D'
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#8a9aaa', fontSize: 14 }}>
@@ -91,10 +117,12 @@ export default function CostsPage() {
   return (
     <>
       <div className="page-header">
-        <div><div className="page-title">Feed costs</div><div className="page-sub">Cost per animal · Daily spend · Monthly projection</div></div>
+        <div>
+          <div className="page-title">Feed Costs</div>
+          <div className="page-sub">{currentFarm?.name} · Cost per animal · Daily spend · Monthly projection</div>
+        </div>
         <div className="page-actions">
-          <button className="btn-outline">Export CSV</button>
-          {saving && <span style={{ fontSize: 11, color: '#4CAF7D' }}>Saving...</span>}
+          {saving   && <span style={{ fontSize: 11, color: '#4CAF7D' }}>Saving...</span>}
           {savedMsg && <span style={{ fontSize: 11, color: '#27500A', fontWeight: 600 }}>✓ {savedMsg}</span>}
         </div>
       </div>
@@ -109,10 +137,10 @@ export default function CostsPage() {
       <div className="card">
         <div className="card-header">
           <div className="card-title">Feed prices — edit to update all calculations</div>
-          <span style={{ fontSize: 11, color: savedMsg ? '#27500A' : '#aab8c0', fontWeight: savedMsg ? 600 : 400, transition: 'color 0.3s' }}>{savedMsg ? '✓ Saved to Supabase' : 'Saved on blur'}</span>
+          <span style={{ fontSize: 11, color: savedMsg ? '#27500A' : '#aab8c0', fontWeight: savedMsg ? 600 : 400 }}>{savedMsg ? '✓ Saved' : 'Click away to save'}</span>
         </div>
         {prices.length === 0 ? (
-          <div style={{ color: '#8a9aaa', fontSize: 13 }}>No feed prices found. Check Supabase → feed_prices table.</div>
+          <div style={{ color: '#8a9aaa', fontSize: 13 }}>No feed prices found for this farm.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
             {prices.map(p => (
@@ -125,7 +153,8 @@ export default function CostsPage() {
                   <span style={{ fontSize: 13, color: '#8a9aaa' }}>$</span>
                   <input type="number" value={localPrices[p.material] ?? p.price_per_tonne}
                     onChange={e => setLocalPrices(prev => ({ ...prev, [p.material]: Number(e.target.value) }))}
-                    onBlur={e => savePrice(p.material, Number(e.target.value))} step={5}
+                    onBlur={e => savePrice(p.material, Number(e.target.value))}
+                    step={5}
                     style={{ border: '0.5px solid #c8d8cc', borderRadius: 6, padding: '5px 8px', fontSize: 14, fontWeight: 600, color: '#1a2530', background: '#fff', width: 80, fontFamily: 'inherit' }} />
                   <span style={{ fontSize: 11, color: '#aab8c0' }}>/t</span>
                 </div>
@@ -139,25 +168,34 @@ export default function CostsPage() {
         <div className="card" style={{ marginBottom: 0 }}>
           <div className="card-header"><div className="card-title">Cost per group</div><span style={{ fontSize: 11, color: '#aab8c0' }}>Edit counts to recalculate</span></div>
           {groups.length === 0 ? (
-            <div style={{ color: '#8a9aaa', fontSize: 13 }}>No animal groups found in Supabase.</div>
+            <div style={{ color: '#8a9aaa', fontSize: 13 }}>No animal groups found for this farm.</div>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>{['Group','Count','Feed/day','$/head/day','Daily cost','30 days'].map(h => (
-                <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>
-              ))}</tr></thead>
+              <thead>
+                <tr>{['Group', 'Count', 'Feed/day', '$/head/day', 'Daily cost', '30 days'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#aab8c0', fontWeight: 600, padding: '0 10px 10px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #f0f4f0' }}>{h}</th>
+                ))}</tr>
+              </thead>
               <tbody>
                 {groups.map(g => {
-                  const cost = groupDailyCost(g), feed = groupDailyFeed(g), cpp = g.count > 0 ? cost/g.count : 0
+                  const cost = groupDailyCost(g)
+                  const feed = groupDailyFeed(g)
+                  const cpp  = g.count > 0 ? cost / g.count : 0
                   return (
                     <tr key={g.id}>
                       <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           {g.icon && <span style={{ fontSize: 16 }}>{g.icon}</span>}
-                          <span style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{g.name}</span>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{g.name}</div>
+                            <div style={{ fontSize: 10, color: '#aab8c0', textTransform: 'capitalize' }}>{g.type}</div>
+                          </div>
                         </div>
                       </td>
                       <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0' }}>
-                        <input type="number" defaultValue={g.count} onBlur={e => saveCount(g.id, Number(e.target.value))} step={10}
+                        <input type="number" defaultValue={g.count}
+                          onBlur={e => saveCount(g.id, Number(e.target.value))}
+                          step={10}
                           style={{ border: '0.5px solid #e8ede9', borderRadius: 4, padding: '4px 8px', fontSize: 12, color: '#1a2530', background: '#f7f9f8', width: 68, fontFamily: 'inherit', textAlign: 'center' }} />
                       </td>
                       <td style={{ padding: '10px', borderBottom: '0.5px solid #f0f4f0', fontSize: 12, color: '#8a9aaa' }}>{Math.round(feed).toLocaleString()} kg</td>
@@ -184,8 +222,10 @@ export default function CostsPage() {
           {donutMaterials.length > 0 ? (
             <>
               <div style={{ height: 180, position: 'relative', marginBottom: 16 }}>
-                <Doughnut data={{ labels: donutMaterials, datasets: [{ data: donutMaterials.map(m => Math.round(materialCosts[m])), backgroundColor: donutMaterials.map(m => MATERIAL_COLORS[m] || '#aab8c0'), borderWidth: 0, hoverOffset: 4 }] }}
-                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 10, padding: 10 } }, tooltip: { callbacks: { label: (ctx) => ` $${ctx.parsed.toLocaleString()}/day` } } } }} />
+                <Doughnut
+                  data={{ labels: donutMaterials, datasets: [{ data: donutMaterials.map(m => Math.round(materialCosts[m])), backgroundColor: donutMaterials.map(m => MATERIAL_COLORS[m] || '#aab8c0'), borderWidth: 0, hoverOffset: 4 }] }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 10, padding: 10 } }, tooltip: { callbacks: { label: (ctx) => ` $${ctx.parsed.toLocaleString()}/day` } } } }}
+                />
               </div>
               {donutMaterials.map(m => {
                 const pct = totalMatCost > 0 ? Math.round(materialCosts[m]/totalMatCost*100) : 0
@@ -212,9 +252,9 @@ export default function CostsPage() {
         <div className="card-header"><div className="card-title">Cost projections</div></div>
         <div className="grid-3" style={{ marginBottom: 0 }}>
           {[
-            { label: 'This month',       val: Math.round(totalDaily*30),    sub: 'At current rate' },
-            { label: 'Next month est.',  val: Math.round(totalDaily*30*1.05), sub: '+5% seasonal adjustment' },
-            { label: 'Annual projection',val: Math.round(totalDaily*365),   sub: 'At flat current rate' },
+            { label: 'This month',        val: Math.round(totalDaily*30),      sub: 'At current rate'            },
+            { label: 'Next month est.',   val: Math.round(totalDaily*30*1.05), sub: '+5% seasonal adjustment'    },
+            { label: 'Annual projection', val: Math.round(totalDaily*365),     sub: 'At flat current rate'       },
           ].map(p => (
             <div key={p.label} style={{ background: '#f7f9f8', borderRadius: 10, padding: '16px 18px' }}>
               <div style={{ fontSize: 11, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>{p.label}</div>
