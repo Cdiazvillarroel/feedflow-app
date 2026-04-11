@@ -111,9 +111,11 @@ export default function AdminUsersPage() {
     setDrawer('new')
   }
 
-  function openEdit(u: AppUser) {
+  async function openEdit(u: AppUser) {
     setForm({ email: u.email, password: '', role: u.role || 'client', client_id: u.client_id || '' })
-    setSelectedFarmIds(userFarms[u.id] || [])
+    // Load farm assignments directly for this user
+    const { data } = await supabase.from('user_farms').select('farm_id').eq('user_id', u.id)
+    setSelectedFarmIds((data || []).map((r: any) => r.farm_id))
     setDrawer(u)
   }
 
