@@ -127,31 +127,40 @@ export default function NutritionOverviewPage() {
       const millFarms   = farms.filter(fa => fa.feed_mill_id === f.feed_mill_id)
       const millFarmIds = millFarms.map(fa => fa.id)
 
-      // Animal groups of this type in this mill's farms
+      // All animal groups of this type across ALL farms of this mill
       const matchingGroups = animalGroups.filter(g =>
         g.type === f.animal_type && millFarmIds.includes(g.farm_id)
       )
       if (matchingGroups.length === 0) return { ...f, dailyKg: 0, totalKg: 0, totalCost: 0 }
 
-      // For each group, get kg/head from assigned feeds in Feed Library
+      // Global avg kg/head/day across ALL feeds of this type in this mill
+      const allMillFeeds = feeds.filter(feed =>
+        feed.animal_type === f.animal_type && millFarmIds.includes(feed.farm_id)
+      )
+      const globalAvgKgPerHead = allMillFeeds.length > 0
+        ? allMillFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0) / allMillFeeds.length
+        : 0
+
+      if (globalAvgKgPerHead === 0) return { ...f, dailyKg: 0, totalKg: 0, totalCost: 0 }
+
       const dailyKg = matchingGroups.reduce((total, group) => {
+        // Priority 1: assigned feeds via animal_group_feeds
         const assignedFeedIds = groupFeeds
           .filter(gf => gf.animal_group_id === group.id)
           .map(gf => gf.feed_id)
 
         let kgPerHead = 0
         if (assignedFeedIds.length > 0) {
-          // Use feeds directly assigned to this group
           const assignedFeeds = feeds.filter(feed => assignedFeedIds.includes(feed.id))
           kgPerHead = assignedFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0)
         } else {
-          // Fallback: average of feeds of same animal_type in same farm
+          // Priority 2: feeds of same type in same farm
           const farmFeeds = feeds.filter(feed =>
             feed.farm_id === group.farm_id && feed.animal_type === group.type
           )
           kgPerHead = farmFeeds.length > 0
             ? farmFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0) / farmFeeds.length
-            : 0
+            : globalAvgKgPerHead // Priority 3: mill-wide average
         }
 
         return total + kgPerHead * group.count
