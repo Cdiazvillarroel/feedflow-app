@@ -12,19 +12,30 @@ interface Plan   { id: string; name: string; modules: string[] }
 interface ClientModule { id: string; client_id: string; module: string; is_enabled: boolean }
 
 const ALL_MODULES = [
-  { key: 'dashboard',  label: 'Dashboard',      icon: '◈', desc: 'Main silo overview' },
-  { key: 'alerts',     label: 'Alerts',          icon: '🔔', desc: 'Alarm rules & notifications' },
-  { key: 'analytics',  label: 'Analytics',       icon: '📊', desc: 'Consumption charts & trends' },
-  { key: 'sensors',    label: 'Sensors',          icon: '📡', desc: 'Device inventory & diagnostics' },
-  { key: 'forecast',   label: 'Forecast',         icon: '📈', desc: 'Consumption & cost projections' },
-  { key: 'costs',      label: 'Feed Costs',       icon: '💰', desc: 'Cost per animal & projections' },
-  { key: 'animals',    label: 'Animals',          icon: '🐄', desc: 'Herd groups & rations' },
-  { key: 'feeds',      label: 'Feed Library',     icon: '🌾', desc: 'Feed profiles & nutrition' },
-  { key: 'logistics',  label: 'Logistics',        icon: '🚛', desc: 'Orders, routes & drivers' },
-  { key: 'insights',   label: 'AI Insights',      icon: '🤖', desc: 'Claude AI daily analysis' },
-  { key: 'map',        label: 'Map View',         icon: '🗺️', desc: 'GPS silo map' },
-  { key: 'ai_routes',  label: 'AI Route Planner', icon: '✦', desc: 'AI-powered route optimization' },
-  { key: 'api_access', label: 'API Access',       icon: '⚙️', desc: 'External API integration' },
+  // Monitor
+  { key: 'dashboard',   label: 'Dashboard',      icon: '◈',  desc: 'Main silo overview',              section: 'Monitor' },
+  { key: 'alerts',      label: 'Alerts',          icon: '🔔', desc: 'Alarm rules & notifications',     section: 'Monitor' },
+  { key: 'analytics',   label: 'Analytics',       icon: '📊', desc: 'Consumption charts & trends',     section: 'Monitor' },
+  { key: 'forecast',    label: 'Forecast',        icon: '📈', desc: 'Consumption & cost projections',  section: 'Monitor' },
+  { key: 'ai_insights', label: 'AI Insights',     icon: '🤖', desc: 'Claude AI daily analysis',        section: 'Monitor' },
+  { key: 'map_view',    label: 'Map View',        icon: '🗺️', desc: 'GPS silo map',                    section: 'Monitor' },
+  // Manage
+  { key: 'feed_library', label: 'Feed Library',   icon: '🌾', desc: 'Feed profiles & nutrition',       section: 'Manage' },
+  { key: 'feed_costs',   label: 'Feed Costs',     icon: '💰', desc: 'Cost per animal & projections',   section: 'Manage' },
+  { key: 'animals',      label: 'Animals',        icon: '🐄', desc: 'Herd groups & rations',           section: 'Manage' },
+  { key: 'sensors',      label: 'Sensors',        icon: '📡', desc: 'Device inventory & diagnostics',  section: 'Manage' },
+  // Nutrition
+  { key: 'nutrition_overview', label: 'Nutrition Overview',  icon: '🧪', desc: 'Mill KPIs & AI analysis',        section: 'Nutrition' },
+  { key: 'commodity_library',  label: 'Commodity Library',   icon: '🌿', desc: 'Raw materials & stock tracking',  section: 'Nutrition' },
+  { key: 'formula_manager',    label: 'Formula Manager',     icon: '⚗️', desc: 'Production formulas & costs',     section: 'Nutrition' },
+  { key: 'demand_forecast',    label: 'Demand Forecast',     icon: '📉', desc: 'Ingredient demand projections',   section: 'Nutrition' },
+  // Logistics
+  { key: 'farm_monitor',  label: 'Farm Monitor',    icon: '🚛', desc: 'Multi-farm silo overview',       section: 'Logistics' },
+  { key: 'orders',        label: 'Orders',           icon: '📋', desc: 'Delivery order management',      section: 'Logistics' },
+  { key: 'route_planner', label: 'Route Planner',    icon: '🗂️', desc: 'Delivery route planning',        section: 'Logistics' },
+  { key: 'drivers',       label: 'Drivers',           icon: '👤', desc: 'Driver & truck management',      section: 'Logistics' },
+  // Settings
+  { key: 'account',       label: 'Account',           icon: '⚙️', desc: 'Account settings',               section: 'Settings' },
 ]
 
 export default function ModulesPage() {
@@ -189,34 +200,45 @@ export default function ModulesPage() {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-            {ALL_MODULES.map(mod => {
-              const enabled   = isModuleEnabled(mod.key)
-              const inPlan    = isInPlan(mod.key)
-              const isLoading = saving === mod.key
-              const isOverride = clientModules.some(m => m.client_id === selectedClient && m.module === mod.key)
-
-              return (
-                <div key={mod.key} style={{ background: '#fff', borderRadius: 10, border: '0.5px solid ' + (enabled ? '#4CAF7D44' : '#e8ede9'), padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 8, background: enabled ? '#eaf5ee' : '#f7f9f8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                    {mod.icon}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{mod.label}</span>
-                      {isOverride && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: '#FAEEDA', color: '#633806', fontWeight: 600 }}>OVERRIDE</span>}
-                      {inPlan && !isOverride && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: '#eaf5ee', color: '#27500A', fontWeight: 600 }}>PLAN</span>}
-                    </div>
-                    <div style={{ fontSize: 11, color: '#aab8c0' }}>{mod.desc}</div>
-                  </div>
-                  <button onClick={() => toggleModule(mod.key)} disabled={!!saving || !selectedClient}
-                    style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', background: enabled ? '#4CAF7D' : '#e8ede9', transition: 'background 0.2s', position: 'relative', flexShrink: 0 }}>
-                    <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: enabled ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
-                  </button>
+          {['Monitor', 'Manage', 'Nutrition', 'Logistics', 'Settings'].map(section => {
+            const sectionModules = ALL_MODULES.filter(m => m.section === section)
+            if (sectionModules.length === 0) return null
+            return (
+              <div key={section} style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '8px 0 8px', borderBottom: '0.5px solid #e8ede9', marginBottom: 10 }}>
+                  {section}
                 </div>
-              )
-            })}
-          </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                  {sectionModules.map(mod => {
+                    const enabled   = isModuleEnabled(mod.key)
+                    const inPlan    = isInPlan(mod.key)
+                    const isLoading = saving === mod.key
+                    const isOverride = clientModules.some(m => m.client_id === selectedClient && m.module === mod.key)
+
+                    return (
+                      <div key={mod.key} style={{ background: '#fff', borderRadius: 10, border: '0.5px solid ' + (enabled ? '#4CAF7D44' : '#e8ede9'), padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 38, height: 38, borderRadius: 8, background: enabled ? '#eaf5ee' : '#f7f9f8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                          {mod.icon}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#1a2530' }}>{mod.label}</span>
+                            {isOverride && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: '#FAEEDA', color: '#633806', fontWeight: 600 }}>OVERRIDE</span>}
+                            {inPlan && !isOverride && <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: '#eaf5ee', color: '#27500A', fontWeight: 600 }}>PLAN</span>}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#aab8c0' }}>{mod.desc}</div>
+                        </div>
+                        <button onClick={() => toggleModule(mod.key)} disabled={!!saving || !selectedClient}
+                          style={{ width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', background: enabled ? '#4CAF7D' : '#e8ede9', transition: 'background 0.2s', position: 'relative', flexShrink: 0 }}>
+                          <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: enabled ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
     </>
