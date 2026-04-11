@@ -9,7 +9,7 @@ const supabase = createClient(
 
 interface Client { id: string; name: string; plan_id: string | null; status: string }
 interface Plan   { id: string; name: string; modules: string[] }
-interface ClientModule { id: string; client_id: string; module: string; is_enabled: boolean }
+interface ClientModule { id: string; client_id: string; module: string; is_enabled: boolean; source: string }
 
 const ALL_MODULES = [
   // Monitor
@@ -79,20 +79,18 @@ export default function ModulesPage() {
   }
 
   function isInPlan(mod: string) {
-    return currentPlan?.modules.includes(mod) || false
+    return clientModules.some(m => m.client_id === selectedClient && m.module === mod && m.source === 'PLAN')
   }
 
   async function toggleModule(mod: string) {
     if (!selectedClient) return
     setSaving(mod)
-    const current  = isModuleEnabled(mod)
-    const existing = clientModules.find(m => m.client_id === selectedClient && m.module === mod)
-
-    if (existing) {
-      await supabase.from('client_modules').update({ is_enabled: !current }).eq('id', existing.id)
-    } else {
-      await supabase.from('client_modules').insert({ client_id: selectedClient, module: mod, is_enabled: !current })
-    }
+    const current = isModuleEnabled(mod)
+    await fetch('/api/admin/modules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'toggle', client_id: selectedClient, module: mod, is_enabled: !current }),
+    })
     showMsg(`${mod} ${!current ? 'enabled' : 'disabled'}`)
     setSaving('')
     loadAll()
@@ -101,12 +99,11 @@ export default function ModulesPage() {
   async function applyPlanModules() {
     if (!selectedClient || !currentPlan) return
     setSaving('all')
-    // Delete existing overrides
-    await supabase.from('client_modules').delete().eq('client_id', selectedClient)
-    // Insert plan modules as enabled
-    await supabase.from('client_modules').insert(
-      currentPlan.modules.map(mod => ({ client_id: selectedClient, module: mod, is_enabled: true }))
-    )
+    await fetch('/api/admin/modules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset_to_plan', client_id: selectedClient }),
+    })
     showMsg('Plan modules applied')
     setSaving('')
     loadAll()
@@ -115,10 +112,11 @@ export default function ModulesPage() {
   async function disableAll() {
     if (!selectedClient || !confirm('Disable all modules for this client?')) return
     setSaving('all')
-    await supabase.from('client_modules').delete().eq('client_id', selectedClient)
-    await supabase.from('client_modules').insert(
-      ALL_MODULES.map(m => ({ client_id: selectedClient, module: m.key, is_enabled: false }))
-    )
+    await fetch('/api/admin/modules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'disable_all', client_id: selectedClient, modules: ALL_MODULES.map(m => m.key) }),
+    })
     showMsg('All modules disabled')
     setSaving('')
     loadAll()
@@ -213,7 +211,7 @@ export default function ModulesPage() {
                     const enabled   = isModuleEnabled(mod.key)
                     const inPlan    = isInPlan(mod.key)
                     const isLoading = saving === mod.key
-                    const isOverride = clientModules.some(m => m.client_id === selectedClient && m.module === mod.key)
+                    const isOverride = clientModules.some(m => m.client_id === selectedClient && m.module === mod.key && m.source === 'OVERRIDE')
 
                     return (
                       <div key={mod.key} style={{ background: '#fff', borderRadius: 10, border: '0.5px solid ' + (enabled ? '#4CAF7D44' : '#e8ede9'), padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
