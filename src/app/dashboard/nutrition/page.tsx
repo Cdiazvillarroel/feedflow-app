@@ -27,6 +27,8 @@ const ANIMAL_ICONS: Record<string, string> = {
   cattle: '🐄', pig: '🐖', poultry: '🐔', sheep: '🐑', other: '🐾'
 }
 
+const BAR_COLORS = ['#4CAF7D','#4A90C4','#EF9F27','#E24B4A','#9B59B6','#1ABC9C','#633806','#aab8c0']
+
 export default function NutritionOverviewPage() {
   const { selectedMillId } = useFarm()
 
@@ -47,6 +49,8 @@ export default function NutritionOverviewPage() {
 
   async function loadAll() {
     setLoading(true)
+    setAiInsight(null)
+
     const [millsR, commR, formulasR, ingR, farmsR] = await Promise.all([
       supabase.from('feed_mills').select('id, name').order('name'),
       selectedMillId
@@ -56,24 +60,30 @@ export default function NutritionOverviewPage() {
         ? supabase.from('feed_formulas').select('id, name, animal_type, feed_mill_id, cost_per_tonne').eq('feed_mill_id', selectedMillId).eq('active', true)
         : supabase.from('feed_formulas').select('id, name, animal_type, feed_mill_id, cost_per_tonne').eq('active', true),
       supabase.from('formula_ingredients').select('formula_id, commodity_id, inclusion_pct'),
-      selectedMillId
-        ? supabase.from('farms').select('id, name, feed_mill_id').eq('feed_mill_id', selectedMillId)
-        : supabase.from('farms').select('id, name, feed_mill_id'),
+      supabase.from('farms').select('id, name, feed_mill_id'),
     ])
+
     const farmList = farmsR.data || []
     setMills(millsR.data || [])
     setCommodities(commR.data || [])
     setFormulas(formulasR.data || [])
     setFormulaIngs(ingR.data || [])
     setFarms(farmList)
-    const farmIds = farmList.map(f => f.id)
-    if (farmIds.length > 0) {
+
+    const relevantFarmIds = selectedMillId
+      ? farmList.filter(f => f.feed_mill_id === selectedMillId).map(f => f.id)
+      : farmList.map(f => f.id)
+
+    if (relevantFarmIds.length > 0) {
       const [groupsR, feedsR] = await Promise.all([
-        supabase.from('animal_groups').select('id, name, type, count, farm_id').in('farm_id', farmIds),
-        supabase.from('feeds').select('id, name, material, kg_per_head_day, animal_type, farm_id').in('farm_id', farmIds).eq('active', true),
+        supabase.from('animal_groups').select('id, name, type, count, farm_id').in('farm_id', relevantFarmIds),
+        supabase.from('feeds').select('id, name, material, kg_per_head_day, animal_type, farm_id').in('farm_id', relevantFarmIds).eq('active', true),
       ])
       setAnimalGroups(groupsR.data || [])
       setFeeds(feedsR.data || [])
+    } else {
+      setAnimalGroups([])
+      setFeeds([])
     }
     setLoading(false)
   }
@@ -106,18 +116,26 @@ export default function NutritionOverviewPage() {
 
   const formulaDemand = useMemo(() => {
     return formulas.map(f => {
-      const relatedFeeds = feeds.filter(feed => {
-        const farm = farms.find(fa => fa.id === feed.farm_id)
-        return farm?.feed_mill_id === f.feed_mill_id && feed.animal_type === f.animal_type
-      })
-      const dailyKg = relatedFeeds.reduce((s, feed) => {
-        const groups = animalGroups.filter(g => g.farm_id === feed.farm_id && g.type === feed.animal_type)
-        return s + groups.reduce((gs, g) => gs + feed.kg_per_head_day * g.count, 0)
-      }, 0)
+      // All farms served by this formula's mill
+      const millFarms   = farms.filter(fa => fa.feed_mill_id === f.feed_mill_id)
+      const millFarmIds = millFarms.map(fa => fa.id)
+
+      // All animal groups of matching type across those farms
+      const matchingGroups      = animalGroups.filter(g => g.type === f.animal_type && millFarmIds.includes(g.farm_id))
+      const totalAnimalsOfType  = matchingGroups.reduce((s, g) => s + g.count, 0)
+
+      // Average kg/head/day from feeds of matching type in those farms
+      const matchingFeeds = feeds.filter(feed => feed.animal_type === f.animal_type && millFarmIds.includes(feed.farm_id))
+      const avgKgPerHead  = matchingFeeds.length > 0
+        ? matchingFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0) / matchingFeeds.length
+        : 0
+
+      const dailyKg   = totalAnimalsOfType * avgKgPerHead
       const totalKg   = dailyKg * forecastHorizon
       const totalCost = totalKg / 1000 * (f.cost_per_tonne || 0)
+
       return { ...f, dailyKg, totalKg, totalCost }
-    }).filter(f => f.dailyKg > 0).sort((a, b) => b.totalKg - a.totalKg)
+    }).filter(f => f.totalKg > 0).sort((a, b) => b.totalKg - a.totalKg)
   }, [formulas, feeds, farms, animalGroups, forecastHorizon])
 
   const topFormulas = [...formulas].filter(f => f.cost_per_tonne).sort((a, b) => (b.cost_per_tonne || 0) - (a.cost_per_tonne || 0)).slice(0, 5)
@@ -127,8 +145,6 @@ export default function NutritionOverviewPage() {
     { href: '/dashboard/nutrition/formulas',           label: 'Formula Manager',   icon: '🧪', desc: `${formulas.length} formulas · avg $${avgCost}/t`,                       color: '#4A90C4' },
     { href: '/dashboard/nutrition/forecast_nutrition', label: 'Demand Forecast',   icon: '📊', desc: `${(dailyFeedKg / 1000).toFixed(1)}t/day · ${farms.length} farms`,       color: '#EF9F27' },
   ]
-
-  const BAR_COLORS = ['#4CAF7D','#4A90C4','#EF9F27','#E24B4A','#9B59B6','#1ABC9C','#633806','#aab8c0']
 
   async function generateAIInsight() {
     setAiLoading(true); setAiError('')
@@ -145,7 +161,7 @@ LOW STOCK ITEMS: ${lowStockItems.filter(c => c.stock_kg > c.min_stock_kg * 0.5).
 FORMULAS: ${formulas.length} active · avg cost $${avgCost}/t · range $${minCost}–$${maxCost}/t
 MOST EXPENSIVE FORMULA: ${topFormulas[0]?.name || '—'} at $${topFormulas[0]?.cost_per_tonne || 0}/t
 CHEAPEST FORMULA: ${topFormulas[topFormulas.length-1]?.name || '—'} at $${topFormulas[topFormulas.length-1]?.cost_per_tonne || 0}/t
-FARMS SERVED: ${farms.length}
+FARMS SERVED: ${farms.filter(f => !selectedMillId || f.feed_mill_id === selectedMillId).length}
 ANIMAL GROUPS: ${animalGroups.length} groups · ${totalAnimals.toLocaleString()} animals total
 ANIMAL BREAKDOWN: ${Object.entries(animalsByType).map(([t, c]) => `${t}: ${c.toLocaleString()}`).join(', ')}
 DAILY FEED DEMAND: ${(dailyFeedKg/1000).toFixed(1)} tonnes/day
@@ -164,7 +180,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
       })
-      const data = await response.json()
+      const data  = await response.json()
       const text  = data.content?.[0]?.text || ''
       const clean = text.replace(/```json|```/g, '').trim()
       const parsed: AIInsightResult = JSON.parse(clean)
@@ -210,7 +226,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Commodities</div><div className="sum-val">{commodities.length}</div><div className="sum-sub">{lowStockItems.length} low stock</div></div>
         <div className="sum-card"><div className="sum-label">Formulas</div><div className="sum-val" style={{ color: '#4A90C4' }}>{formulas.length}</div><div className="sum-sub">Avg ${avgCost}/tonne</div></div>
-        <div className="sum-card"><div className="sum-label">Daily feed demand</div><div className="sum-val" style={{ color: '#EF9F27' }}>{(dailyFeedKg / 1000).toFixed(1)}t</div><div className="sum-sub">{farms.length} farms · {animalGroups.length} groups</div></div>
+        <div className="sum-card"><div className="sum-label">Daily feed demand</div><div className="sum-val" style={{ color: '#EF9F27' }}>{(dailyFeedKg / 1000).toFixed(1)}t</div><div className="sum-sub">{farms.filter(f => !selectedMillId || f.feed_mill_id === selectedMillId).length} farms · {animalGroups.length} groups</div></div>
         <div className="sum-card"><div className="sum-label">Total animals</div><div className="sum-val green">{totalAnimals.toLocaleString()}</div><div className="sum-sub">Across all farms</div></div>
       </div>
 
@@ -395,18 +411,21 @@ Respond ONLY with valid JSON, no markdown, no explanation:
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {formulaDemand.slice(0, 4).map((f, i) => (
+                {formulaDemand.slice(0, 5).map((f, i) => (
                   <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: 2, background: BAR_COLORS[i % 4], flexShrink: 0 }} />
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: BAR_COLORS[i % 8], flexShrink: 0 }} />
                     <span style={{ fontSize: 11, color: '#1a2530', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: '#1a2530', flexShrink: 0 }}>{(f.totalKg / 1000).toFixed(1)}t</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', flexShrink: 0 }}>{(f.totalKg / 1000).toFixed(1)}t</span>
                     <span style={{ fontSize: 10, color: '#aab8c0', flexShrink: 0 }}>${Math.round(f.totalCost).toLocaleString()}</span>
                   </div>
                 ))}
               </div>
             </>
           ) : (
-            <div style={{ color: '#aab8c0', fontSize: 13, padding: '20px 0' }}>No formula demand data available.</div>
+            <div style={{ color: '#aab8c0', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
+              <div style={{ fontSize: 24, marginBottom: 8 }}>📊</div>
+              No formula demand data available for this mill.
+            </div>
           )}
         </div>
 
@@ -446,7 +465,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
       <div className="card">
         <div className="card-header">
           <div className="card-title">Animals by type</div>
-          <span style={{ fontSize: 11, color: '#aab8c0' }}>{totalAnimals.toLocaleString()} total · {farms.length} farms</span>
+          <span style={{ fontSize: 11, color: '#aab8c0' }}>{totalAnimals.toLocaleString()} total · {farms.filter(f => !selectedMillId || f.feed_mill_id === selectedMillId).length} farms</span>
         </div>
         {Object.keys(animalsByType).length === 0 ? (
           <div style={{ color: '#aab8c0', fontSize: 13, padding: '20px 0' }}>No animal groups found.</div>
