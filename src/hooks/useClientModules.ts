@@ -18,13 +18,21 @@ export function useClientModules(userId: string | null) {
   useEffect(() => {
     if (!userId) return
     async function load() {
-      // Buscar client_id del usuario
-      const { data: cuData } = await supabase
-        .from('client_users')
-        .select('client_id')
-        .eq('user_id', userId)
-        .single()
+      // Buscar client_id del usuario — usar maybeSingle() en lugar de single()
+const { data: cuData } = await supabase
+  .from('client_users')
+  .select('client_id')
+  .eq('user_id', userId)
+  .maybeSingle()
 
+// Si no tiene client_users, verificar si es admin
+if (!cuData) {
+  const { data: roleData } = await supabase
+    .from('roles')
+    .select('role')
+    .eq('user_id', userId)
+    .maybeSingle()  // ← también cambiar este
+  
       // Si no tiene client_users, verificar si es admin
       if (!cuData) {
         const { data: roleData } = await supabase
