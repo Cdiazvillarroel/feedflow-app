@@ -113,9 +113,18 @@ export default function AdminUsersPage() {
 
   async function openEdit(u: AppUser) {
     setForm({ email: u.email, password: '', role: u.role || 'client', client_id: u.client_id || '' })
-    // Load farm assignments directly for this user
-    const { data } = await supabase.from('user_farms').select('farm_id').eq('user_id', u.id)
-    setSelectedFarmIds((data || []).map((r: any) => r.farm_id))
+    // Load farm assignments via API (service role, bypasses RLS)
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_user_farms', user_id: u.id }),
+      })
+      const data = await res.json()
+      setSelectedFarmIds(data.farm_ids || [])
+    } catch {
+      setSelectedFarmIds([])
+    }
     setDrawer(u)
   }
 
