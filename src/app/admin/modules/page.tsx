@@ -9,7 +9,7 @@ const supabase = createClient(
 
 interface Client { id: string; name: string; plan_id: string | null; status: string }
 interface Plan   { id: string; name: string; modules: string[] }
-interface ClientModule { id: string; client_id: string; module: string; enabled: boolean }
+interface ClientModule { id: string; client_id: string; module: string; is_enabled: boolean }
 
 const ALL_MODULES = [
   { key: 'dashboard',  label: 'Dashboard',      icon: '◈', desc: 'Main silo overview' },
@@ -58,12 +58,12 @@ export default function ModulesPage() {
   const currentClient = clients.find(c => c.id === selectedClient)
   const currentPlan   = plans.find(p => p.id === currentClient?.plan_id)
   const enabledForClient = clientModules
-    .filter(m => m.client_id === selectedClient && m.enabled)
+    .filter(m => m.client_id === selectedClient && m.is_enabled)
     .map(m => m.module)
 
   function isModuleEnabled(mod: string) {
     const override = clientModules.find(m => m.client_id === selectedClient && m.module === mod)
-    if (override) return override.enabled
+    if (override) return override.is_enabled
     return currentPlan?.modules.includes(mod) || false
   }
 
@@ -78,9 +78,9 @@ export default function ModulesPage() {
     const existing = clientModules.find(m => m.client_id === selectedClient && m.module === mod)
 
     if (existing) {
-      await supabase.from('client_modules').update({ enabled: !current }).eq('id', existing.id)
+      await supabase.from('client_modules').update({ is_enabled: !current }).eq('id', existing.id)
     } else {
-      await supabase.from('client_modules').insert({ client_id: selectedClient, module: mod, enabled: !current })
+      await supabase.from('client_modules').insert({ client_id: selectedClient, module: mod, is_enabled: !current })
     }
     showMsg(`${mod} ${!current ? 'enabled' : 'disabled'}`)
     setSaving('')
@@ -94,7 +94,7 @@ export default function ModulesPage() {
     await supabase.from('client_modules').delete().eq('client_id', selectedClient)
     // Insert plan modules as enabled
     await supabase.from('client_modules').insert(
-      currentPlan.modules.map(mod => ({ client_id: selectedClient, module: mod, enabled: true }))
+      currentPlan.modules.map(mod => ({ client_id: selectedClient, module: mod, is_enabled: true }))
     )
     showMsg('Plan modules applied')
     setSaving('')
@@ -106,7 +106,7 @@ export default function ModulesPage() {
     setSaving('all')
     await supabase.from('client_modules').delete().eq('client_id', selectedClient)
     await supabase.from('client_modules').insert(
-      ALL_MODULES.map(m => ({ client_id: selectedClient, module: m.key, enabled: false }))
+      ALL_MODULES.map(m => ({ client_id: selectedClient, module: m.key, is_enabled: false }))
     )
     showMsg('All modules disabled')
     setSaving('')
