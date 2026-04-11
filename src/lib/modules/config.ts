@@ -1,89 +1,93 @@
-'use client'
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { SIDEBAR_GROUPS, type ModuleKey, type FeatureLevel, type SidebarGroup } from '@/lib/modules/config'
+export type ModuleKey =
+  | 'dashboard' | 'alerts' | 'sensors' | 'map_view'
+  | 'feed_library' | 'animals' | 'feed_costs'
+  | 'analytics' | 'forecast' | 'ai_insights'
+  | 'nutrition_overview' | 'commodity_library'
+  | 'formula_manager' | 'demand_forecast'
+  | 'farm_monitor' | 'orders' | 'route_planner' | 'drivers'
+  | 'account'
 
-interface ClientModule {
-  module:        ModuleKey
-  is_enabled:    boolean
-  feature_level: FeatureLevel
-  source:        'PLAN' | 'OVERRIDE' | 'ADDON'
+export type FeatureLevel = 'readonly' | 'basic' | 'full' | 'ai'
+
+export interface SidebarItem {
+  key: ModuleKey
+  label: string
+  href: string
+  icon: string
+  badge?: boolean
 }
 
-export function useClientModules(userId: string | null) {
-  const [modules,  setModules]  = useState<Map<ModuleKey, ClientModule>>(new Map())
-  const [loading,  setLoading]  = useState(true)
-  const [clientId, setClientId] = useState<string | null>(null)
+export interface SidebarGroup {
+  section: string
+  items: SidebarItem[]
+}
 
-  useEffect(() => {
-    if (!userId) return
-    async function load() {
-      // Buscar client_id del usuario
-      const { data: cuData } = await supabase
-        .from('client_users')
-        .select('client_id')
-        .eq('user_id', userId)
-        .single()
+export const SIDEBAR_GROUPS: SidebarGroup[] = [
+  {
+    section: 'Monitor',
+    items: [
+      { key: 'dashboard',   label: 'Dashboard',   href: '/dashboard',           icon: 'grid'     },
+      { key: 'alerts',      label: 'Alerts',      href: '/dashboard/alerts',    icon: 'bell', badge: true },
+      { key: 'analytics',   label: 'Analytics',   href: '/dashboard/analytics', icon: 'activity' },
+      { key: 'forecast',    label: 'Forecast',    href: '/dashboard/forecast',  icon: 'trending' },
+      { key: 'ai_insights', label: 'AI Insights', href: '/dashboard/insights',  icon: 'ai'       },
+      { key: 'map_view',    label: 'Map View',    href: '/dashboard/map',       icon: 'map'      },
+    ],
+  },
+  {
+    section: 'Manage',
+    items: [
+      { key: 'feed_library', label: 'Feed Library', href: '/dashboard/feeds',   icon: 'grain'  },
+      { key: 'feed_costs',   label: 'Feed Costs',   href: '/dashboard/costs',   icon: 'dollar' },
+      { key: 'animals',      label: 'Animals',      href: '/dashboard/animals', icon: 'users'  },
+      { key: 'sensors',      label: 'Sensors',      href: '/dashboard/sensors', icon: 'wifi'   },
+    ],
+  },
+  {
+    section: 'Nutrition',
+    items: [
+      { key: 'nutrition_overview', label: 'Overview',          href: '/dashboard/nutrition',                          icon: 'nutrition' },
+      { key: 'commodity_library',  label: 'Commodity Library', href: '/dashboard/nutrition/library',                  icon: 'grain'     },
+      { key: 'formula_manager',    label: 'Formula Manager',   href: '/dashboard/nutrition/formulas',                 icon: 'formula'   },
+      { key: 'demand_forecast',    label: 'Demand Forecast',   href: '/dashboard/nutrition/forecast_nutrition',       icon: 'forecast'  },
+    ],
+  },
+  {
+    section: 'Logistics',
+    items: [
+      { key: 'farm_monitor',  label: 'Farm Monitor',  href: '/dashboard/logistics',         icon: 'truck'     },
+      { key: 'orders',        label: 'Orders',        href: '/dashboard/logistics/orders',  icon: 'clipboard' },
+      { key: 'route_planner', label: 'Route Planner', href: '/dashboard/logistics/routes',  icon: 'route'     },
+      { key: 'drivers',       label: 'Drivers',       href: '/dashboard/logistics/drivers', icon: 'driver'    },
+    ],
+  },
+  {
+    section: 'Settings',
+    items: [
+      { key: 'account', label: 'Account', href: '/dashboard/account', icon: 'settings' },
+    ],
+  },
+]
 
-      // Si no tiene client_users, verificar si es admin
-      if (!cuData) {
-        const { data: roleData } = await supabase
-          .from('roles')
-          .select('role')
-          .eq('user_id', userId)
-          .single()
-
-        // Admin ve todo
-        if (roleData?.role === 'admin') {
-          const allModules = new Map<ModuleKey, ClientModule>()
-          SIDEBAR_GROUPS.forEach(g => g.items.forEach(item => {
-            allModules.set(item.key, { module: item.key, is_enabled: true, feature_level: 'ai', source: 'PLAN' })
-          }))
-          setModules(allModules)
-          setLoading(false)
-          return
-        }
-
-        // Usuario sin cliente — mostrar solo dashboard
-        const fallback = new Map<ModuleKey, ClientModule>()
-        fallback.set('dashboard', { module: 'dashboard', is_enabled: true, feature_level: 'basic', source: 'PLAN' })
-        setModules(fallback)
-        setLoading(false)
-        return
-      }
-
-      setClientId(cuData.client_id)
-
-      // Cargar módulos del cliente
-      const { data: modulesData } = await supabase
-        .from('client_modules')
-        .select('module, is_enabled, feature_level, source')
-        .eq('client_id', cuData.client_id)
-        .eq('is_enabled', true)
-
-      const map = new Map<ModuleKey, ClientModule>()
-      ;(modulesData || []).forEach(m => {
-        map.set(m.module as ModuleKey, m as ClientModule)
-      })
-      setModules(map)
-      setLoading(false)
-    }
-    load()
-  }, [userId])
-
-  // Sidebar filtrado — solo grupos con al menos un módulo activo
-  const sidebarGroups: SidebarGroup[] = SIDEBAR_GROUPS
-    .map(group => ({
-      ...group,
-      items: group.items.filter(item => modules.has(item.key)),
-    }))
-    .filter(group => group.items.length > 0)
-
-  const hasModule    = (key: ModuleKey) => modules.has(key)
-  const featureLevel = (key: ModuleKey): FeatureLevel | null => modules.get(key)?.feature_level ?? null
-  const hasAI        = (key: ModuleKey) => featureLevel(key) === 'ai'
-  const isReadonly   = (key: ModuleKey) => featureLevel(key) === 'readonly'
-  const canEdit      = (key: ModuleKey) => { const l = featureLevel(key); return l === 'full' || l === 'ai' }
-
-  return { modules, sidebarGroups, hasModule, featureLevel, hasAI, isReadonly, canEdit, loading, clientId }
+// Mapa ruta → module_key para middleware
+export const ROUTE_MODULE_MAP: Partial<Record<string, ModuleKey>> = {
+  '/dashboard':                                    'dashboard',
+  '/dashboard/alerts':                             'alerts',
+  '/dashboard/analytics':                          'analytics',
+  '/dashboard/forecast':                           'forecast',
+  '/dashboard/insights':                           'ai_insights',
+  '/dashboard/map':                                'map_view',
+  '/dashboard/feeds':                              'feed_library',
+  '/dashboard/costs':                              'feed_costs',
+  '/dashboard/animals':                            'animals',
+  '/dashboard/sensors':                            'sensors',
+  '/dashboard/nutrition':                          'nutrition_overview',
+  '/dashboard/nutrition/library':                  'commodity_library',
+  '/dashboard/nutrition/formulas':                 'formula_manager',
+  '/dashboard/nutrition/forecast_nutrition':       'demand_forecast',
+  '/dashboard/logistics':                          'farm_monitor',
+  '/dashboard/logistics/orders':                   'orders',
+  '/dashboard/logistics/routes':                   'route_planner',
+  '/dashboard/logistics/drivers':                  'drivers',
+  '/dashboard/account':                            'account',
 }
