@@ -146,33 +146,25 @@ export default function AdminUsersPage() {
   // Get farms for the currently selected client
   const clientFarms = farms.filter(f => f.client_id === form.client_id)
 
-  async function saveUserFarms(userId: string) {
-    // Delete existing farm assignments
-    await supabase.from('user_farms').delete().eq('user_id', userId)
-    // Insert new ones
-    if (selectedFarmIds.length > 0) {
-      await supabase.from('user_farms').insert(
-        selectedFarmIds.map(farmId => ({ user_id: userId, farm_id: farmId, role: form.role === 'admin' ? 'admin' : 'owner' }))
-      )
-    }
-  }
-
   async function createUser() {
     if (!form.email.trim() || !form.password.trim()) return
     setSaving(true)
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create', email: form.email, password: form.password, role: form.role, client_id: form.client_id }),
+      body: JSON.stringify({
+        action: 'create',
+        email: form.email,
+        password: form.password,
+        role: form.role,
+        client_id: form.client_id,
+        farm_ids: selectedFarmIds,
+      }),
     })
     const data = await res.json()
     if (data.error) {
       showMsg('Error: ' + data.error)
     } else {
-      // Assign farms to the newly created user
-      if (data.user_id && selectedFarmIds.length > 0) {
-        await saveUserFarms(data.user_id)
-      }
       showMsg('User created')
       setDrawer(null)
       loadAll()
@@ -182,20 +174,30 @@ export default function AdminUsersPage() {
 
   async function updateUserRole(userId: string) {
     setSaving(true)
-    await supabase.from('roles').upsert({ user_id: userId, role: form.role })
-    if (form.client_id) {
-      await supabase.from('client_users').upsert({ user_id: userId, client_id: form.client_id, role: 'owner' })
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'update',
+        user_id: userId,
+        role: form.role,
+        client_id: form.client_id,
+        farm_ids: selectedFarmIds,
+      }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      showMsg('Error: ' + data.error)
+    } else {
+      showMsg('User updated')
+      setDrawer(null)
+      loadAll()
     }
-    // Save farm assignments
-    await saveUserFarms(userId)
-    showMsg('User updated'); setDrawer(null); loadAll()
     setSaving(false)
   }
 
   async function deleteUser(userId: string) {
     if (!confirm('Delete this user? This cannot be undone.')) return
-    // Clean up farm assignments
-    await supabase.from('user_farms').delete().eq('user_id', userId)
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
