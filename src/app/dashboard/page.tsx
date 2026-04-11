@@ -36,14 +36,20 @@ export default function DashboardPage() {
   const [sort,    setSort]    = useState('level')
   const [drawer,  setDrawer]  = useState<SiloRow | null>(null)
 
-  useEffect(() => { if (farmId) loadAll() }, [farmId])
+  useEffect(() => {
+    if (farmId) {
+      loadAll()
+    } else {
+      setLoading(false)
+    }
+  }, [farmId])
 
   async function loadAll() {
     setLoading(true)
     const [silosR, insightR] = await Promise.all([
       supabase.from('silos').select('*').eq('farm_id', farmId).order('name'),
       supabase.from('ai_insights').select('insights').eq('farm_id', farmId)
-        .order('insight_date', { ascending: false }).limit(1).single(),
+        .order('insight_date', { ascending: false }).limit(1).maybeSingle(),
     ])
 
     const silosData: Silo[] = silosR.data || []
@@ -108,6 +114,16 @@ export default function DashboardPage() {
     </div>
   )
 
+  if (!farmId) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
+      <div style={{ textAlign: 'center', color: '#8a9aaa' }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>🌾</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: '#1a2530', marginBottom: 8 }}>Select a farm</div>
+        <div style={{ fontSize: 13 }}>Choose a farm from the sidebar to view its dashboard.</div>
+      </div>
+    </div>
+  )
+
   return (
     <>
       {/* SILO DRAWER */}
@@ -129,7 +145,6 @@ export default function DashboardPage() {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Level gauge */}
               <div style={{ background: '#1a2530', borderRadius: 12, padding: '20px 22px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
                   <div>
@@ -149,7 +164,6 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* KPIs */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 {[
                   { label: 'Feed available', val: `${Math.round(drawer.kg_remaining).toLocaleString()} kg` },
@@ -164,7 +178,6 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {/* Sensor */}
               {drawer.sensor && (
                 <div style={{ background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 10, padding: '14px 16px' }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>Sensor</div>
@@ -188,12 +201,11 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* Consumption estimate */}
               <div style={{ background: '#f7f9f8', borderRadius: 10, padding: '14px 16px' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>Consumption estimate</div>
                 {[
-                  { k: 'Daily consumption', v: `${Math.round(drawer.capacity_kg * 0.02).toLocaleString()} kg/day` },
-                  { k: 'Weekly consumption', v: `${Math.round(drawer.capacity_kg * 0.02 * 7).toLocaleString()} kg` },
+                  { k: 'Daily consumption',    v: `${Math.round(drawer.capacity_kg * 0.02).toLocaleString()} kg/day` },
+                  { k: 'Weekly consumption',   v: `${Math.round(drawer.capacity_kg * 0.02 * 7).toLocaleString()} kg` },
                   { k: 'Order needed (to 85%)', v: `${Math.round(Math.max(0, drawer.capacity_kg * 0.85 - drawer.kg_remaining)).toLocaleString()} kg` },
                 ].map(r => (
                   <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid #e8ede9' }}>
@@ -203,7 +215,6 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              {/* Alert status */}
               <div style={{ padding: '12px 14px', borderRadius: 10, background: drawer.alert_level === 'critical' ? '#FCEBEB' : drawer.alert_level === 'low' ? '#FAEEDA' : '#eaf5ee', border: `0.5px solid ${borderColor(drawer.alert_level)}33` }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: borderColor(drawer.alert_level), textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>
                   {drawer.alert_level === 'critical' ? '🚨 Critical' : drawer.alert_level === 'low' ? '⚠ Low level' : '✓ Normal'}
