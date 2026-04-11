@@ -181,7 +181,7 @@ export default function HealthCheckPage() {
   const [rows,       setRows]       = useState<HealthRow[]>([])
   const [loading,    setLoading]    = useState(false)
   const [lastRun,    setLastRun]    = useState<Date | null>(null)
-  const [filter,     setFilter]     = useState<'all' | 'ERROR' | 'WARNING'>('all')
+  const [filter,     setFilter]     = useState<'all' | 'ERROR' | 'WARNING' | 'OK'>('all')
 
   // Use direct SQL via a view instead
   async function runCheckDirect() {
@@ -328,6 +328,7 @@ export default function HealthCheckPage() {
             { key: 'all',     label: 'All checks' },
             { key: 'ERROR',   label: `Errors (${errors})` },
             { key: 'WARNING', label: `Warnings (${warnings})` },
+            { key: 'OK',      label: `Passed (${ok})` },
           ].map(f => (
             <button key={f.key} onClick={() => setFilter(f.key as any)}
               style={{ padding: '6px 14px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: '0.5px solid', fontFamily: 'inherit', borderColor: filter === f.key ? '#1a2530' : '#e8ede9', background: filter === f.key ? '#1a2530' : '#fff', color: filter === f.key ? '#fff' : '#6a7a8a' }}>
