@@ -12,6 +12,7 @@ const NAV = [
   { href: '/admin/modules',      label: 'Modules',    icon: '🔧' },
   { href: '/admin/invoices',     label: 'Invoices',   icon: '💳' },
   { href: '/admin/database',     label: 'Database',   icon: '🗄️' },
+  { href: '/admin/health', label: 'Health Check', icon: '🩺' },
   { href: '/admin/audit',        label: 'Audit Log',  icon: '📋' },
 ]
 
