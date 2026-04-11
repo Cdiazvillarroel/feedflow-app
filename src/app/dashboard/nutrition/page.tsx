@@ -15,6 +15,7 @@ interface FormulaIng  { formula_id: string; commodity_id: string; inclusion_pct:
 interface AnimalGroup { id: string; name: string; type: string; count: number; farm_id: string }
 interface Feed        { id: string; name: string; material: string; kg_per_head_day: number; animal_type: string; farm_id: string }
 interface Farm        { id: string; name: string; feed_mill_id: string | null }
+interface GroupFeed   { animal_group_id: string; feed_id: string }
 
 interface AIInsightResult {
   summary: string
@@ -39,6 +40,7 @@ export default function NutritionOverviewPage() {
   const [animalGroups,    setAnimalGroups]    = useState<AnimalGroup[]>([])
   const [feeds,           setFeeds]           = useState<Feed[]>([])
   const [farms,           setFarms]           = useState<Farm[]>([])
+  const [groupFeeds,      setGroupFeeds]      = useState<GroupFeed[]>([])
   const [loading,         setLoading]         = useState(true)
   const [aiInsight,       setAiInsight]       = useState<AIInsightResult | null>(null)
   const [aiLoading,       setAiLoading]       = useState(false)
@@ -75,15 +77,18 @@ export default function NutritionOverviewPage() {
       : farmList.map(f => f.id)
 
     if (relevantFarmIds.length > 0) {
-      const [groupsR, feedsR] = await Promise.all([
+      const [groupsR, feedsR, agfR] = await Promise.all([
         supabase.from('animal_groups').select('id, name, type, count, farm_id').in('farm_id', relevantFarmIds),
         supabase.from('feeds').select('id, name, material, kg_per_head_day, animal_type, farm_id').in('farm_id', relevantFarmIds).eq('active', true),
+        supabase.from('animal_group_feeds').select('animal_group_id, feed_id'),
       ])
       setAnimalGroups(groupsR.data || [])
       setFeeds(feedsR.data || [])
+      setGroupFeeds(agfR.data || [])
     } else {
       setAnimalGroups([])
       setFeeds([])
+      setGroupFeeds([])
     }
     setLoading(false)
   }
@@ -109,41 +114,62 @@ export default function NutritionOverviewPage() {
 
   const dailyFeedKg = useMemo(() => {
     return animalGroups.reduce((s, g) => {
-      const gf = feeds.filter(f => f.animal_type === g.type && f.farm_id === g.farm_id)
-      return s + gf.reduce((fs, f) => fs + f.kg_per_head_day * g.count, 0)
+      const assignedFeedIds = groupFeeds.filter(gf => gf.animal_group_id === g.id).map(gf => gf.feed_id)
+      const groupFeedList   = assignedFeedIds.length > 0
+        ? feeds.filter(f => assignedFeedIds.includes(f.id))
+        : feeds.filter(f => f.animal_type === g.type && f.farm_id === g.farm_id)
+      return s + groupFeedList.reduce((fs, f) => fs + f.kg_per_head_day * g.count, 0)
     }, 0)
-  }, [animalGroups, feeds])
+  }, [animalGroups, feeds, groupFeeds])
 
   const formulaDemand = useMemo(() => {
     return formulas.map(f => {
-      // All farms served by this formula's mill
       const millFarms   = farms.filter(fa => fa.feed_mill_id === f.feed_mill_id)
       const millFarmIds = millFarms.map(fa => fa.id)
 
-      // All animal groups of matching type across those farms
-      const matchingGroups      = animalGroups.filter(g => g.type === f.animal_type && millFarmIds.includes(g.farm_id))
-      const totalAnimalsOfType  = matchingGroups.reduce((s, g) => s + g.count, 0)
+      // Animal groups of this type in this mill's farms
+      const matchingGroups = animalGroups.filter(g =>
+        g.type === f.animal_type && millFarmIds.includes(g.farm_id)
+      )
+      if (matchingGroups.length === 0) return { ...f, dailyKg: 0, totalKg: 0, totalCost: 0 }
 
-      // Average kg/head/day from feeds of matching type in those farms
-      const matchingFeeds = feeds.filter(feed => feed.animal_type === f.animal_type && millFarmIds.includes(feed.farm_id))
-      const avgKgPerHead  = matchingFeeds.length > 0
-        ? matchingFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0) / matchingFeeds.length
-        : 0
+      // For each group, get kg/head from assigned feeds in Feed Library
+      const dailyKg = matchingGroups.reduce((total, group) => {
+        const assignedFeedIds = groupFeeds
+          .filter(gf => gf.animal_group_id === group.id)
+          .map(gf => gf.feed_id)
 
-      const dailyKg   = totalAnimalsOfType * avgKgPerHead
+        let kgPerHead = 0
+        if (assignedFeedIds.length > 0) {
+          // Use feeds directly assigned to this group
+          const assignedFeeds = feeds.filter(feed => assignedFeedIds.includes(feed.id))
+          kgPerHead = assignedFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0)
+        } else {
+          // Fallback: average of feeds of same animal_type in same farm
+          const farmFeeds = feeds.filter(feed =>
+            feed.farm_id === group.farm_id && feed.animal_type === group.type
+          )
+          kgPerHead = farmFeeds.length > 0
+            ? farmFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0) / farmFeeds.length
+            : 0
+        }
+
+        return total + kgPerHead * group.count
+      }, 0)
+
       const totalKg   = dailyKg * forecastHorizon
       const totalCost = totalKg / 1000 * (f.cost_per_tonne || 0)
 
       return { ...f, dailyKg, totalKg, totalCost }
     }).filter(f => f.totalKg > 0).sort((a, b) => b.totalKg - a.totalKg)
-  }, [formulas, feeds, farms, animalGroups, forecastHorizon])
+  }, [formulas, feeds, farms, animalGroups, groupFeeds, forecastHorizon])
 
   const topFormulas = [...formulas].filter(f => f.cost_per_tonne).sort((a, b) => (b.cost_per_tonne || 0) - (a.cost_per_tonne || 0)).slice(0, 5)
 
   const QUICK_LINKS = [
     { href: '/dashboard/nutrition/library',            label: 'Commodity Library', icon: '🌾', desc: `${commodities.length} commodities · ${lowStockItems.length} low stock`, color: '#4CAF7D' },
     { href: '/dashboard/nutrition/formulas',           label: 'Formula Manager',   icon: '🧪', desc: `${formulas.length} formulas · avg $${avgCost}/t`,                       color: '#4A90C4' },
-    { href: '/dashboard/nutrition/forecast_nutrition', label: 'Demand Forecast',   icon: '📊', desc: `${(dailyFeedKg / 1000).toFixed(1)}t/day · ${farms.length} farms`,       color: '#EF9F27' },
+    { href: '/dashboard/nutrition/forecast_nutrition', label: 'Demand Forecast',   icon: '📊', desc: `${(dailyFeedKg / 1000).toFixed(1)}t/day · ${farms.filter(f => !selectedMillId || f.feed_mill_id === selectedMillId).length} farms`, color: '#EF9F27' },
   ]
 
   async function generateAIInsight() {
@@ -422,8 +448,8 @@ Respond ONLY with valid JSON, no markdown, no explanation:
               </div>
             </>
           ) : (
-            <div style={{ color: '#aab8c0', fontSize: 13, padding: '20px 0', textAlign: 'center' }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>📊</div>
+            <div style={{ color: '#aab8c0', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📊</div>
               No formula demand data available for this mill.
             </div>
           )}
