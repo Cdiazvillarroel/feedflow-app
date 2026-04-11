@@ -3,10 +3,10 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useFarm } from '@/app/dashboard/FarmContext'
 import Link from 'next/link'
-import { Doughnut } from 'react-chartjs-2'
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
+import { Bar } from 'react-chartjs-2'
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js'
 
-ChartJS.register(ArcElement, Tooltip, Legend)
+ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
 interface FeedMill    { id: string; name: string }
 interface Commodity   { id: string; name: string; category: string; price_per_tonne: number | null; stock_kg: number; min_stock_kg: number; feed_mill_id: string }
@@ -23,11 +23,6 @@ interface AIInsightResult {
   forecast_note: string
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  grain: '#EF9F27', protein: '#4CAF7D', fat: '#E24B4A',
-  fiber: '#9B59B6', mineral: '#4A90C4', vitamin: '#1ABC9C',
-  additive: '#633806', other: '#8a9aaa',
-}
 const ANIMAL_ICONS: Record<string, string> = {
   cattle: '🐄', pig: '🐖', poultry: '🐔', sheep: '🐑', other: '🐾'
 }
@@ -35,17 +30,18 @@ const ANIMAL_ICONS: Record<string, string> = {
 export default function NutritionOverviewPage() {
   const { selectedMillId } = useFarm()
 
-  const [mills,        setMills]        = useState<FeedMill[]>([])
-  const [commodities,  setCommodities]  = useState<Commodity[]>([])
-  const [formulas,     setFormulas]     = useState<Formula[]>([])
-  const [formulaIngs,  setFormulaIngs]  = useState<FormulaIng[]>([])
-  const [animalGroups, setAnimalGroups] = useState<AnimalGroup[]>([])
-  const [feeds,        setFeeds]        = useState<Feed[]>([])
-  const [farms,        setFarms]        = useState<Farm[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [aiInsight,    setAiInsight]    = useState<AIInsightResult | null>(null)
-  const [aiLoading,    setAiLoading]    = useState(false)
-  const [aiError,      setAiError]      = useState('')
+  const [mills,           setMills]           = useState<FeedMill[]>([])
+  const [commodities,     setCommodities]     = useState<Commodity[]>([])
+  const [formulas,        setFormulas]        = useState<Formula[]>([])
+  const [formulaIngs,     setFormulaIngs]     = useState<FormulaIng[]>([])
+  const [animalGroups,    setAnimalGroups]    = useState<AnimalGroup[]>([])
+  const [feeds,           setFeeds]           = useState<Feed[]>([])
+  const [farms,           setFarms]           = useState<Farm[]>([])
+  const [loading,         setLoading]         = useState(true)
+  const [aiInsight,       setAiInsight]       = useState<AIInsightResult | null>(null)
+  const [aiLoading,       setAiLoading]       = useState(false)
+  const [aiError,         setAiError]         = useState('')
+  const [forecastHorizon, setForecastHorizon] = useState(14)
 
   useEffect(() => { loadAll() }, [selectedMillId])
 
@@ -84,15 +80,9 @@ export default function NutritionOverviewPage() {
 
   const millName = (id: string) => mills.find(m => m.id === id)?.name || '—'
 
-  const lowStockItems  = commodities.filter(c => c.stock_kg <= c.min_stock_kg)
-  const criticalStock  = commodities.filter(c => c.stock_kg <= c.min_stock_kg * 0.5)
-  const okStock        = commodities.filter(c => c.stock_kg > c.min_stock_kg)
-
-  const catBreakdown = useMemo(() => {
-    const map: Record<string, number> = {}
-    commodities.forEach(c => { map[c.category] = (map[c.category] || 0) + 1 })
-    return map
-  }, [commodities])
+  const lowStockItems = commodities.filter(c => c.stock_kg <= c.min_stock_kg)
+  const criticalStock = commodities.filter(c => c.stock_kg <= c.min_stock_kg * 0.5)
+  const okStock       = commodities.filter(c => c.stock_kg > c.min_stock_kg)
 
   const formulaCosts = formulas.filter(f => f.cost_per_tonne).map(f => f.cost_per_tonne!)
   const avgCost = formulaCosts.length > 0 ? Math.round(formulaCosts.reduce((a, b) => a + b, 0) / formulaCosts.length) : 0
@@ -114,13 +104,23 @@ export default function NutritionOverviewPage() {
     }, 0)
   }, [animalGroups, feeds])
 
-  const topFormulas = [...formulas].filter(f => f.cost_per_tonne).sort((a, b) => (b.cost_per_tonne || 0) - (a.cost_per_tonne || 0)).slice(0, 5)
+  const formulaDemand = useMemo(() => {
+    return formulas.map(f => {
+      const relatedFeeds = feeds.filter(feed => {
+        const farm = farms.find(fa => fa.id === feed.farm_id)
+        return farm?.feed_mill_id === f.feed_mill_id && feed.animal_type === f.animal_type
+      })
+      const dailyKg = relatedFeeds.reduce((s, feed) => {
+        const groups = animalGroups.filter(g => g.farm_id === feed.farm_id && g.type === feed.animal_type)
+        return s + groups.reduce((gs, g) => gs + feed.kg_per_head_day * g.count, 0)
+      }, 0)
+      const totalKg   = dailyKg * forecastHorizon
+      const totalCost = totalKg / 1000 * (f.cost_per_tonne || 0)
+      return { ...f, dailyKg, totalKg, totalCost }
+    }).filter(f => f.dailyKg > 0).sort((a, b) => b.totalKg - a.totalKg)
+  }, [formulas, feeds, farms, animalGroups, forecastHorizon])
 
-  const catLabels = Object.keys(catBreakdown)
-  const donutData = {
-    labels: catLabels.map(c => c.charAt(0).toUpperCase() + c.slice(1)),
-    datasets: [{ data: catLabels.map(c => catBreakdown[c]), backgroundColor: catLabels.map(c => CATEGORY_COLORS[c] || '#aab8c0'), borderWidth: 0, hoverOffset: 4 }]
-  }
+  const topFormulas = [...formulas].filter(f => f.cost_per_tonne).sort((a, b) => (b.cost_per_tonne || 0) - (a.cost_per_tonne || 0)).slice(0, 5)
 
   const QUICK_LINKS = [
     { href: '/dashboard/nutrition/library',            label: 'Commodity Library', icon: '🌾', desc: `${commodities.length} commodities · ${lowStockItems.length} low stock`, color: '#4CAF7D' },
@@ -128,7 +128,8 @@ export default function NutritionOverviewPage() {
     { href: '/dashboard/nutrition/forecast_nutrition', label: 'Demand Forecast',   icon: '📊', desc: `${(dailyFeedKg / 1000).toFixed(1)}t/day · ${farms.length} farms`,       color: '#EF9F27' },
   ]
 
-  // ── AI ANALYSIS ────────────────────────────────────────────────────────────
+  const BAR_COLORS = ['#4CAF7D','#4A90C4','#EF9F27','#E24B4A','#9B59B6','#1ABC9C','#633806','#aab8c0']
+
   async function generateAIInsight() {
     setAiLoading(true); setAiError('')
     try {
@@ -148,7 +149,7 @@ FARMS SERVED: ${farms.length}
 ANIMAL GROUPS: ${animalGroups.length} groups · ${totalAnimals.toLocaleString()} animals total
 ANIMAL BREAKDOWN: ${Object.entries(animalsByType).map(([t, c]) => `${t}: ${c.toLocaleString()}`).join(', ')}
 DAILY FEED DEMAND: ${(dailyFeedKg/1000).toFixed(1)} tonnes/day
-30-DAY DEMAND: ${(dailyFeedKg*30/1000).toFixed(0)} tonnes
+TOP FORMULA DEMAND: ${formulaDemand.slice(0,3).map(f => `${f.name}: ${(f.totalKg/1000).toFixed(1)}t over ${forecastHorizon} days`).join(', ')}
 
 Respond ONLY with valid JSON, no markdown, no explanation:
 {
@@ -159,14 +160,12 @@ Respond ONLY with valid JSON, no markdown, no explanation:
 }`
 
       const response = await fetch('/api/nutrition-ai', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    messages: [{ role: 'user', content: prompt }],
-  }),
-})
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+      })
       const data = await response.json()
-      const text = data.content?.[0]?.text || ''
+      const text  = data.content?.[0]?.text || ''
       const clean = text.replace(/```json|```/g, '').trim()
       const parsed: AIInsightResult = JSON.parse(clean)
       setAiInsight(parsed)
@@ -215,7 +214,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
         <div className="sum-card"><div className="sum-label">Total animals</div><div className="sum-val green">{totalAnimals.toLocaleString()}</div><div className="sum-sub">Across all farms</div></div>
       </div>
 
-      {/* AI INSIGHT PANEL */}
+      {/* AI LOADING */}
       {aiLoading && (
         <div style={{ background: '#1a2530', borderRadius: 12, padding: '20px 24px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ width: 32, height: 32, border: '2px solid rgba(76,175,125,0.3)', borderTopColor: '#4CAF7D', borderRadius: '50%', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
@@ -223,19 +222,16 @@ Respond ONLY with valid JSON, no markdown, no explanation:
             <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Claude AI is analysing your nutrition data...</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>Reviewing stock levels, formula costs and demand outlook</div>
           </div>
-          <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
 
       {aiError && (
-        <div style={{ padding: '12px 16px', background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 10, fontSize: 13, color: '#A32D2D', marginBottom: 20 }}>
-          {aiError}
-        </div>
+        <div style={{ padding: '12px 16px', background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 10, fontSize: 13, color: '#A32D2D', marginBottom: 20 }}>{aiError}</div>
       )}
 
+      {/* AI INSIGHT */}
       {aiInsight && !aiLoading && (
         <div style={{ background: '#1a2530', borderRadius: 12, padding: '20px 24px', marginBottom: 20 }}>
-          {/* Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{ width: 34, height: 34, borderRadius: 8, background: 'rgba(76,175,125,0.15)', border: '0.5px solid rgba(76,175,125,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -248,41 +244,33 @@ Respond ONLY with valid JSON, no markdown, no explanation:
             </div>
             <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 10, background: 'rgba(76,175,125,0.15)', color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.3)' }}>Claude AI</span>
           </div>
-
-          {/* Summary */}
           <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: '12px 16px', marginBottom: 14, borderLeft: '3px solid #4CAF7D' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#4CAF7D', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Overview</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.82)', lineHeight: 1.6 }}>{aiInsight.summary}</div>
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-            {/* Critical actions */}
             <div style={{ background: 'rgba(226,75,74,0.08)', borderRadius: 8, padding: '12px 14px', border: '0.5px solid rgba(226,75,74,0.2)' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#E24B4A', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>🚨 Critical actions</div>
               {aiInsight.critical_actions.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>No critical actions required.</div>
-              ) : aiInsight.critical_actions.map((action, i) => (
+              ) : aiInsight.critical_actions.map((a, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: '#E24B4A', flexShrink: 0, marginTop: 1 }}>•</span>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>{action}</span>
+                  <span style={{ fontSize: 11, color: '#E24B4A', flexShrink: 0 }}>•</span>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>{a}</span>
                 </div>
               ))}
             </div>
-
-            {/* Opportunities */}
             <div style={{ background: 'rgba(76,175,125,0.08)', borderRadius: 8, padding: '12px 14px', border: '0.5px solid rgba(76,175,125,0.2)' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#4CAF7D', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>💡 Opportunities</div>
               {aiInsight.opportunities.length === 0 ? (
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>No opportunities identified.</div>
-              ) : aiInsight.opportunities.map((opp, i) => (
+              ) : aiInsight.opportunities.map((o, i) => (
                 <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: '#4CAF7D', flexShrink: 0, marginTop: 1 }}>•</span>
-                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>{opp}</span>
+                  <span style={{ fontSize: 11, color: '#4CAF7D', flexShrink: 0 }}>•</span>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>{o}</span>
                 </div>
               ))}
             </div>
-
-            {/* Forecast note */}
             <div style={{ background: 'rgba(74,144,196,0.08)', borderRadius: 8, padding: '12px 14px', border: '0.5px solid rgba(74,144,196,0.2)' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#4A90C4', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>📈 Demand outlook</div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.6 }}>{aiInsight.forecast_note}</div>
@@ -305,13 +293,10 @@ Respond ONLY with valid JSON, no markdown, no explanation:
             </div>
             <Link href="/dashboard/nutrition/library" style={{ fontSize: 12, color: '#4CAF7D', fontWeight: 600, textDecoration: 'none' }}>Manage stock →</Link>
           </div>
-
-          {/* Critical */}
           {criticalStock.length > 0 && (
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#A32D2D', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#E24B4A' }} />
-                Critical — immediate action required
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#E24B4A' }} />Critical — immediate action required
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
                 {criticalStock.map(c => (
@@ -332,13 +317,10 @@ Respond ONLY with valid JSON, no markdown, no explanation:
               </div>
             </div>
           )}
-
-          {/* Low stock */}
           {lowStockItems.filter(c => c.stock_kg > c.min_stock_kg * 0.5).length > 0 && (
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#633806', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF9F27' }} />
-                Low — order soon
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF9F27' }} />Low — order soon
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
                 {lowStockItems.filter(c => c.stock_kg > c.min_stock_kg * 0.5).map(c => (
@@ -370,9 +352,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
               onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'; (e.currentTarget as HTMLElement).style.borderColor = link.color + '44' }}
               onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; (e.currentTarget as HTMLElement).style.borderColor = '#e8ede9' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 42, height: 42, borderRadius: 10, background: link.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
-                  {link.icon}
-                </div>
+                <div style={{ width: 42, height: 42, borderRadius: 10, background: link.color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>{link.icon}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#1a2530' }}>{link.label}</div>
                   <div style={{ fontSize: 11, color: '#8a9aaa', marginTop: 2 }}>{link.desc}</div>
@@ -385,32 +365,48 @@ Respond ONLY with valid JSON, no markdown, no explanation:
       </div>
 
       <div className="grid-2">
-        {/* COMMODITY BREAKDOWN */}
+        {/* FORMULA DEMAND FORECAST */}
         <div className="card" style={{ marginBottom: 0 }}>
-          <div className="card-header"><div className="card-title">Commodity breakdown by category</div></div>
-          {catLabels.length > 0 ? (
-            <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-              <div style={{ height: 180, width: 180, flexShrink: 0 }}>
-                <Doughnut data={donutData} options={{ responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, cutout: '65%' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                {catLabels.map(cat => {
-                  const pct = Math.round(catBreakdown[cat] / commodities.length * 100)
-                  return (
-                    <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: CATEGORY_COLORS[cat] || '#aab8c0', flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, color: '#1a2530', flex: 1, textTransform: 'capitalize' }}>{cat}</span>
-                      <div style={{ width: 60, height: 4, background: '#f0f4f0', borderRadius: 2, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', background: CATEGORY_COLORS[cat] || '#aab8c0', borderRadius: 2, width: `${pct}%` }} />
-                      </div>
-                      <span style={{ fontSize: 11, color: '#aab8c0', width: 24, textAlign: 'right' }}>{catBreakdown[cat]}</span>
-                    </div>
-                  )
-                })}
-              </div>
+          <div className="card-header">
+            <div className="card-title">Formula demand forecast</div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[7, 14, 30].map(h => (
+                <button key={h} onClick={() => setForecastHorizon(h)}
+                  style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer', border: 'none', fontFamily: 'inherit', background: forecastHorizon === h ? '#1a2530' : '#f0f4f0', color: forecastHorizon === h ? '#fff' : '#6a7a8a' }}>
+                  {h}d
+                </button>
+              ))}
             </div>
+          </div>
+          {formulaDemand.length > 0 ? (
+            <>
+              <div style={{ height: 200, position: 'relative', marginBottom: 12 }}>
+                <Bar
+                  data={{
+                    labels: formulaDemand.slice(0, 8).map(f => f.name.length > 16 ? f.name.slice(0, 16) + '…' : f.name),
+                    datasets: [{
+                      label: `Demand (t) over ${forecastHorizon} days`,
+                      data: formulaDemand.slice(0, 8).map(f => Math.round(f.totalKg / 10) / 100),
+                      backgroundColor: formulaDemand.slice(0, 8).map((_, i) => BAR_COLORS[i % 8]),
+                      borderRadius: 4,
+                    }]
+                  }}
+                  options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { font: { size: 9 }, color: '#aab8c0', maxRotation: 30 }, border: { display: false } }, y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 10 }, color: '#aab8c0', callback: (v: any) => v + 't' }, border: { display: false } } } }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {formulaDemand.slice(0, 4).map((f, i) => (
+                  <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: 2, background: BAR_COLORS[i % 4], flexShrink: 0 }} />
+                    <span style={{ fontSize: 11, color: '#1a2530', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#1a2530', flexShrink: 0 }}>{(f.totalKg / 1000).toFixed(1)}t</span>
+                    <span style={{ fontSize: 10, color: '#aab8c0', flexShrink: 0 }}>${Math.round(f.totalCost).toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
-            <div style={{ color: '#aab8c0', fontSize: 13, padding: '20px 0' }}>No commodities yet.</div>
+            <div style={{ color: '#aab8c0', fontSize: 13, padding: '20px 0' }}>No formula demand data available.</div>
           )}
         </div>
 
@@ -446,7 +442,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
 
       <div style={{ marginBottom: 16 }} />
 
-      {/* ANIMAL GROUPS SUMMARY */}
+      {/* ANIMAL GROUPS */}
       <div className="card">
         <div className="card-header">
           <div className="card-title">Animals by type</div>
