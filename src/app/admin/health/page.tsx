@@ -183,32 +183,6 @@ export default function HealthCheckPage() {
   const [lastRun,    setLastRun]    = useState<Date | null>(null)
   const [filter,     setFilter]     = useState<'all' | 'ERROR' | 'WARNING'>('all')
 
-  async function runCheck() {
-    setLoading(true)
-    const { data } = await supabase.rpc('run_health_check').catch(() => ({ data: null }))
-    if (!data) {
-      // Fallback: run via direct query using supabase
-      const { data: rows } = await supabase.from('farms').select('id').limit(1) // warmup
-      const result = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/run_health_check`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-          'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({}),
-      })
-      if (result.ok) {
-        const d = await result.json()
-        setRows(d || [])
-      }
-    } else {
-      setRows(data || [])
-    }
-    setLastRun(new Date())
-    setLoading(false)
-  }
-
   // Use direct SQL via a view instead
   async function runCheckDirect() {
     setLoading(true)
