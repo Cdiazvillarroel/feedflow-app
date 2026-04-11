@@ -67,6 +67,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  if (body.action === 'get_user_farms') {
+    const { data, error } = await supabaseAdmin
+      .from('user_farms')
+      .select('farm_id')
+      .eq('user_id', body.user_id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ farm_ids: (data || []).map((r: any) => r.farm_id) })
+  }
+
   if (body.action === 'delete') {
     await supabaseAdmin.from('user_farms').delete().eq('user_id', body.user_id)
     await supabaseAdmin.from('client_users').delete().eq('user_id', body.user_id)
