@@ -19,9 +19,17 @@ export async function POST(req: NextRequest) {
 
   if (roleData?.role !== 'admin') return NextResponse.json({ error: 'Not authorized' }, { status: 403 })
 
-  const response = NextResponse.json({ ok: true })
+  const response = NextResponse.json({
+    ok: true,
+    session: {
+      access_token:  data.session?.access_token,
+      refresh_token: data.session?.refresh_token,
+    },
+  })
+
   response.cookies.set('admin_token', process.env.ADMIN_SECRET_TOKEN!, {
     httpOnly: true, secure: true, sameSite: 'strict', maxAge: 60 * 60 * 8, path: '/'
   })
+
   return response
 }
