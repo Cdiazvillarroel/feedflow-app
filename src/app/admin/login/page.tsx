@@ -1,6 +1,12 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function AdminLogin() {
   const router = useRouter()
@@ -17,8 +23,17 @@ export default function AdminLogin() {
       body: JSON.stringify({ email, password }),
     })
     const data = await res.json()
-    if (data.ok) router.push('/admin')
-    else { setError(data.error || 'Invalid credentials'); setLoading(false) }
+    if (data.ok && data.session) {
+      // Set Supabase session in the browser so auth.uid() works for RLS
+      await supabase.auth.setSession({
+        access_token:  data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      })
+      router.push('/admin')
+    } else {
+      setError(data.error || 'Invalid credentials')
+      setLoading(false)
+    }
   }
 
   return (
@@ -30,7 +45,6 @@ export default function AdminLogin() {
           </div>
           <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', marginTop: 6 }}>Agrometrics Admin Panel</div>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 6 }}>Email</label>
