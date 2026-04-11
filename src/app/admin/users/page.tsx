@@ -8,6 +8,7 @@ const supabase = createClient(
 )
 
 interface Client { id: string; name: string }
+interface Farm   { id: string; name: string; location: string | null; client_id: string | null }
 interface AppUser {
   id: string; email: string; created_at: string
   role: string | null; client_id: string | null; client_name: string | null
@@ -24,6 +25,8 @@ function lStyle(): React.CSSProperties {
 export default function AdminUsersPage() {
   const [users,    setUsers]    = useState<AppUser[]>([])
   const [clients,  setClients]  = useState<Client[]>([])
+  const [farms,    setFarms]    = useState<Farm[]>([])
+  const [userFarms, setUserFarms] = useState<Record<string, string[]>>({}) // userId -> farmId[]
   const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
   const [msg,      setMsg]      = useState('')
@@ -33,20 +36,31 @@ export default function AdminUsersPage() {
 
   const emptyForm = { email: '', password: '', role: 'client', client_id: '' }
   const [form, setForm] = useState(emptyForm)
+  const [selectedFarmIds, setSelectedFarmIds] = useState<string[]>([])
 
   useEffect(() => { loadAll() }, [])
 
   async function loadAll() {
     setLoading(true)
-    const [rolesR, clientsR, clientUsersR] = await Promise.all([
+    const [rolesR, clientsR, clientUsersR, farmsR, userFarmsR] = await Promise.all([
       supabase.from('roles').select('user_id, role'),
       supabase.from('clients').select('id, name').order('name'),
       supabase.from('client_users').select('user_id, client_id, clients(name)'),
+      supabase.from('farms').select('id, name, location, client_id').order('name'),
+      supabase.from('user_farms').select('user_id, farm_id'),
     ])
 
     setClients(clientsR.data || [])
+    setFarms(farmsR.data || [])
 
-    // Get users from auth via a workaround — list from roles + client_users
+    // Build user_farms map
+    const ufMap: Record<string, string[]> = {}
+    ;(userFarmsR.data || []).forEach((r: any) => {
+      if (!ufMap[r.user_id]) ufMap[r.user_id] = []
+      ufMap[r.user_id].push(r.farm_id)
+    })
+    setUserFarms(ufMap)
+
     const roleMap: Record<string, string> = {}
     ;(rolesR.data || []).forEach(r => { roleMap[r.user_id] = r.role })
 
@@ -55,19 +69,12 @@ export default function AdminUsersPage() {
       clientMap[r.user_id] = { id: r.client_id, name: r.clients?.name || '' }
     })
 
-    // Fetch user emails from profiles or auth — use a combined approach
-    const { data: profileData } = await supabase
-      .from('roles')
-      .select('user_id, role')
-
-    // Build user list from known user IDs
     const allUserIds = [...new Set([
       ...(rolesR.data || []).map(r => r.user_id),
       ...(clientUsersR.data || []).map((r: any) => r.user_id),
     ])]
 
-    // Use client_users joined with auth info via a custom approach
-    const { data: authUsersData, error: rpcError } = await supabase.rpc('get_users_info')
+    const { data: authUsersData } = await supabase.rpc('get_users_info')
 
     if (authUsersData) {
       const mapped: AppUser[] = (authUsersData || []).map((u: any) => ({
@@ -81,7 +88,6 @@ export default function AdminUsersPage() {
       }))
       setUsers(mapped)
     } else {
-      // Fallback: show known users from roles table with limited info
       const fallback: AppUser[] = allUserIds.map(uid => ({
         id:           uid,
         email:        uid === 'a0000000-0000-0000-0000-000000000000' ? 'admin@feedflow.com' : `user-${uid.slice(0,6)}`,
@@ -99,24 +105,78 @@ export default function AdminUsersPage() {
 
   function showMsg(t: string) { setMsg(t); setTimeout(() => setMsg(''), 3000) }
 
-  function openNew() { setForm(emptyForm); setDrawer('new') }
+  function openNew() {
+    setForm(emptyForm)
+    setSelectedFarmIds([])
+    setDrawer('new')
+  }
+
   function openEdit(u: AppUser) {
     setForm({ email: u.email, password: '', role: u.role || 'client', client_id: u.client_id || '' })
+    setSelectedFarmIds(userFarms[u.id] || [])
     setDrawer(u)
+  }
+
+  // When client changes, auto-select all farms of that client
+  function handleClientChange(clientId: string) {
+    setForm(p => ({ ...p, client_id: clientId }))
+    if (clientId) {
+      const clientFarmIds = farms.filter(f => f.client_id === clientId).map(f => f.id)
+      setSelectedFarmIds(clientFarmIds)
+    } else {
+      setSelectedFarmIds([])
+    }
+  }
+
+  function toggleFarm(farmId: string) {
+    setSelectedFarmIds(prev =>
+      prev.includes(farmId) ? prev.filter(id => id !== farmId) : [...prev, farmId]
+    )
+  }
+
+  function selectAllFarms() {
+    const clientFarmIds = farms.filter(f => f.client_id === form.client_id).map(f => f.id)
+    setSelectedFarmIds(clientFarmIds)
+  }
+
+  function deselectAllFarms() {
+    setSelectedFarmIds([])
+  }
+
+  // Get farms for the currently selected client
+  const clientFarms = farms.filter(f => f.client_id === form.client_id)
+
+  async function saveUserFarms(userId: string) {
+    // Delete existing farm assignments
+    await supabase.from('user_farms').delete().eq('user_id', userId)
+    // Insert new ones
+    if (selectedFarmIds.length > 0) {
+      await supabase.from('user_farms').insert(
+        selectedFarmIds.map(farmId => ({ user_id: userId, farm_id: farmId, role: form.role === 'admin' ? 'admin' : 'owner' }))
+      )
+    }
   }
 
   async function createUser() {
     if (!form.email.trim() || !form.password.trim()) return
     setSaving(true)
-    // Call service role API to create user
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'create', email: form.email, password: form.password, role: form.role, client_id: form.client_id }),
     })
     const data = await res.json()
-    if (data.error) { showMsg('Error: ' + data.error) }
-    else { showMsg('User created'); setDrawer(null); loadAll() }
+    if (data.error) {
+      showMsg('Error: ' + data.error)
+    } else {
+      // Assign farms to the newly created user
+      if (data.user_id && selectedFarmIds.length > 0) {
+        await saveUserFarms(data.user_id)
+      }
+      showMsg('User created')
+      setDrawer(null)
+      loadAll()
+    }
     setSaving(false)
   }
 
@@ -126,12 +186,16 @@ export default function AdminUsersPage() {
     if (form.client_id) {
       await supabase.from('client_users').upsert({ user_id: userId, client_id: form.client_id, role: 'owner' })
     }
+    // Save farm assignments
+    await saveUserFarms(userId)
     showMsg('User updated'); setDrawer(null); loadAll()
     setSaving(false)
   }
 
   async function deleteUser(userId: string) {
     if (!confirm('Delete this user? This cannot be undone.')) return
+    // Clean up farm assignments
+    await supabase.from('user_farms').delete().eq('user_id', userId)
     const res = await fetch('/api/admin/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -204,11 +268,88 @@ export default function AdminUsersPage() {
               </div>
               <div>
                 <label style={lStyle()}>Assign to client</label>
-                <select value={form.client_id} onChange={e => setForm(p => ({ ...p, client_id: e.target.value }))} style={{ ...iStyle(true), background: '#fff' }}>
+                <select value={form.client_id} onChange={e => handleClientChange(e.target.value)} style={{ ...iStyle(true), background: '#fff' }}>
                   <option value="">No client (admin only)</option>
                   {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
+
+              {/* ── FARM ASSIGNMENT ── */}
+              {form.client_id && clientFarms.length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#1a2530', textTransform: 'uppercase', letterSpacing: '0.5px', paddingBottom: 8, borderBottom: '0.5px solid #e8ede9', marginTop: 4 }}>
+                    Farm access
+                  </div>
+                  <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 6, marginBottom: 10 }}>
+                    Select which farms this user can access. Unselected farms will not be visible to the user.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                    <button onClick={selectAllFarms}
+                      style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: '0.5px solid #4CAF7D44', background: '#eaf5ee', color: '#27500A' }}>
+                      Select all
+                    </button>
+                    <button onClick={deselectAllFarms}
+                      style={{ padding: '4px 10px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: '0.5px solid #e8ede9', background: '#fff', color: '#8a9aaa' }}>
+                      Deselect all
+                    </button>
+                    <span style={{ fontSize: 11, color: '#8a9aaa', alignSelf: 'center', marginLeft: 'auto' }}>
+                      {selectedFarmIds.length} of {clientFarms.length} selected
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {clientFarms.map(farm => {
+                      const isSelected = selectedFarmIds.includes(farm.id)
+                      return (
+                        <div
+                          key={farm.id}
+                          onClick={() => toggleFarm(farm.id)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                            border: '0.5px solid ' + (isSelected ? '#4CAF7D66' : '#e8ede9'),
+                            background: isSelected ? '#f4fbf7' : '#fff',
+                            transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = '#f7f9f8' }}
+                          onMouseLeave={e => { if (!isSelected) (e.currentTarget as HTMLElement).style.background = '#fff' }}
+                        >
+                          <div style={{
+                            width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+                            border: '1.5px solid ' + (isSelected ? '#4CAF7D' : '#c8d8cc'),
+                            background: isSelected ? '#4CAF7D' : '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.15s',
+                          }}>
+                            {isSelected && (
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, color: '#1a2530' }}>{farm.name}</div>
+                            {farm.location && (
+                              <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 1 }}>{farm.location}</div>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: '#eaf5ee', color: '#27500A', fontWeight: 600 }}>ACCESS</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {form.client_id && clientFarms.length === 0 && (
+                <div style={{ background: '#FAEEDA', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                  <span style={{ fontSize: 14 }}>⚠️</span>
+                  <div style={{ fontSize: 12, color: '#633806' }}>
+                    This client has no farms. Create farms first in the <strong>Farms</strong> section before assigning users.
+                  </div>
+                </div>
+              )}
 
               {isEditing && (
                 <div style={{ background: '#f7f9f8', borderRadius: 10, padding: '14px 16px', marginTop: 4 }}>
@@ -218,6 +359,7 @@ export default function AdminUsersPage() {
                     { k: 'Created',    v: new Date((drawer as AppUser).created_at).toLocaleDateString('en-AU') },
                     { k: 'Last login', v: (drawer as AppUser).last_sign_in ? new Date((drawer as AppUser).last_sign_in!).toLocaleDateString('en-AU') : 'Never' },
                     { k: 'Client',     v: (drawer as AppUser).client_name || '—' },
+                    { k: 'Farms',      v: (userFarms[(drawer as AppUser).id] || []).length + ' assigned' },
                   ].map(r => (
                     <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid #e8ede9' }}>
                       <span style={{ fontSize: 12, color: '#8a9aaa' }}>{r.k}</span>
@@ -292,7 +434,7 @@ export default function AdminUsersPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ background: '#f7f9f8' }}>
-              {['User', 'Role', 'Client', 'Last login', 'Created', ''].map(h => (
+              {['User', 'Role', 'Client', 'Farms', 'Last login', ''].map(h => (
                 <th key={h} style={{ textAlign: 'left', fontSize: 11, color: '#aab8c0', fontWeight: 600, padding: '12px 16px', textTransform: 'uppercase', letterSpacing: '0.4px', borderBottom: '0.5px solid #e8ede9' }}>{h}</th>
               ))}
             </tr>
@@ -302,6 +444,7 @@ export default function AdminUsersPage() {
               <tr><td colSpan={6} style={{ padding: '40px', textAlign: 'center', color: '#aab8c0', fontSize: 13 }}>No users found</td></tr>
             ) : filtered.map(u => {
               const badge = roleBadge(u.role || 'client')
+              const farmCount = (userFarms[u.id] || []).length
               return (
                 <tr key={u.id} onClick={() => openEdit(u)} style={{ cursor: 'pointer', borderBottom: '0.5px solid #f0f4f0' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f7f9f8'}
@@ -320,8 +463,12 @@ export default function AdminUsersPage() {
                     </span>
                   </td>
                   <td style={{ padding: '14px 16px', fontSize: 12, color: '#8a9aaa' }}>{u.client_name || '—'}</td>
+                  <td style={{ padding: '14px 16px' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, background: farmCount > 0 ? '#eaf5ee' : '#f0f4f0', color: farmCount > 0 ? '#27500A' : '#aab8c0' }}>
+                      {farmCount} {farmCount === 1 ? 'farm' : 'farms'}
+                    </span>
+                  </td>
                   <td style={{ padding: '14px 16px', fontSize: 12, color: '#8a9aaa' }}>{u.last_sign_in ? new Date(u.last_sign_in).toLocaleDateString('en-AU') : 'Never'}</td>
-                  <td style={{ padding: '14px 16px', fontSize: 12, color: '#8a9aaa' }}>{new Date(u.created_at).toLocaleDateString('en-AU')}</td>
                   <td style={{ padding: '14px 16px' }}><span style={{ fontSize: 12, color: '#4CAF7D', fontWeight: 600 }}>Edit →</span></td>
                 </tr>
               )
