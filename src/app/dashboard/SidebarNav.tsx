@@ -26,7 +26,7 @@ const navItems = [
   { href: '/dashboard/nutrition',           label: 'Overview',          icon: 'nutrition' },
   { href: '/dashboard/nutrition/library',   label: 'Commodity Library', icon: 'grain'     },
   { href: '/dashboard/nutrition/formulas',  label: 'Formula Manager',   icon: 'formula'   },
-  { href: '/dashboard/nutrition/forecast',  label: 'Demand Forecast',   icon: 'forecast'  },  
+  { href: '/dashboard/nutrition/forecast_nutrition', label: 'Demand Forecast', icon: 'forecast' },
   
   { section: 'Logistics' },
   { href: '/dashboard/logistics',         label: 'Farm Monitor',  icon: 'truck'     },
