@@ -4,38 +4,10 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useFarm } from './FarmContext'
 import { supabase } from '@/lib/supabase'
+import { useClientModules } from '@/hooks/useClientModules'
+import type { SidebarItem } from '@/lib/modules/config'
 
 interface FeedMill { id: string; name: string }
-
-const navItems = [
-  { section: 'Monitor' },
-  { href: '/dashboard',           label: 'Dashboard',   icon: 'grid' },
-  { href: '/dashboard/alerts',    label: 'Alerts',      icon: 'bell', badge: true },
-  { href: '/dashboard/analytics', label: 'Analytics',   icon: 'activity' },
-  { href: '/dashboard/forecast',  label: 'Forecast',    icon: 'trending' },
-  { href: '/dashboard/insights',  label: 'AI Insights', icon: 'ai' },
-  { href: '/dashboard/map',       label: 'Map view',    icon: 'map' },
- 
-  { section: 'Manage' },
-  { href: '/dashboard/feeds',     label: 'Feed library', icon: 'grain'  },
-  { href: '/dashboard/costs',     label: 'Feed costs',   icon: 'dollar' },
-  { href: '/dashboard/animals',   label: 'Animals',     icon: 'users' },
-  { href: '/dashboard/sensors',   label: 'Sensors',     icon: 'wifi' },
-
-  { section: 'NUTRITION' },
-  { href: '/dashboard/nutrition',           label: 'Overview',          icon: 'nutrition' },
-  { href: '/dashboard/nutrition/library',   label: 'Commodity Library', icon: 'grain'     },
-  { href: '/dashboard/nutrition/formulas',  label: 'Formula Manager',   icon: 'formula'   },
-  { href: '/dashboard/nutrition/forecast_nutrition', label: 'Demand Forecast', icon: 'forecast' },
-  
-  { section: 'Logistics' },
-  { href: '/dashboard/logistics',         label: 'Farm Monitor',  icon: 'truck'     },
-  { href: '/dashboard/logistics/orders',  label: 'Orders',        icon: 'clipboard' },
-  { href: '/dashboard/logistics/routes',  label: 'Route Planner', icon: 'route'     },
-  { href: '/dashboard/logistics/drivers', label: 'Drivers',       icon: 'driver'    },
-  { section: 'Settings' },
-  { href: '/dashboard/account',   label: 'Account',     icon: 'settings' },
-]
 
 const icons: Record<string, string> = {
   grid:      'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
@@ -52,24 +24,29 @@ const icons: Record<string, string> = {
   route:     'M3 12h18M3 6h18M3 18h18',
   driver:    'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   settings:  'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
-  grain: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM8 12h8M12 8v8',
+  grain:     'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM8 12h8M12 8v8',
   nutrition: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM8 12h8M12 8v8',
   formula:   'M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18',
+  forecast:  'M23 6l-9.5 9.5-5-5L1 18',
 }
 
 export default function SidebarNav() {
   const path   = usePathname()
   const router = useRouter()
-  const { farms, visibleFarms, currentFarm, setCurrentFarm, selectedMillId, setSelectedMillId, loading } = useFarm()
+  const { farms, visibleFarms, currentFarm, setCurrentFarm, selectedMillId, setSelectedMillId, loading: farmLoading } = useFarm()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [feedMills,    setFeedMills]    = useState<FeedMill[]>([])
   const [alertCount,   setAlertCount]   = useState(0)
+  const [userId,       setUserId]       = useState<string | null>(null)
+
+  const { sidebarGroups, hasAI, loading: modulesLoading } = useClientModules(userId)
 
   useEffect(() => {
     supabase.from('feed_mills').select('id, name').order('name')
       .then(({ data }) => setFeedMills(data || []))
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('acknowledged', false)
       .then(({ count }) => setAlertCount(count || 0))
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
   }, [])
 
   async function handleLogout() {
@@ -78,36 +55,55 @@ export default function SidebarNav() {
     router.refresh()
   }
 
+  function renderItem(item: SidebarItem) {
+    const active  = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
+    const isAI    = item.icon === 'ai'
+    const isTruck = item.icon === 'truck'
+    const aiEnabled = hasAI(item.key)
+
+    return (
+      <Link key={item.href} href={item.href}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 18px', margin: '1px 8px', borderRadius: 6, fontSize: 13, fontWeight: active ? 600 : 400, color: active ? '#166534' : '#374151', background: active ? '#dcfce7' : 'transparent', textDecoration: 'none' }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+          stroke={isAI && !active ? '#4CAF7D' : isTruck && !active ? '#4A90C4' : 'currentColor'}
+          strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink: 0, opacity: active ? 1 : 0.6 }}>
+          <path d={icons[item.icon] || icons.grid} />
+        </svg>
+        <span style={{ flex: 1 }}>{item.label}</span>
+        {isAI && !active && (
+          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: 'rgba(76,175,125,0.12)', color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.3)' }}>AI</span>
+        )}
+        {aiEnabled && !isAI && !active && (
+          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 6, background: 'rgba(76,175,125,0.08)', color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.2)' }}>✦</span>
+        )}
+        {item.badge && alertCount > 0 && (
+          <span style={{ background: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10 }}>{alertCount}</span>
+        )}
+      </Link>
+    )
+  }
+
   return (
     <aside style={{ width: 220, minWidth: 220, background: '#ffffff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', padding: '16px 0 0', overflowY: 'auto', flexShrink: 0, minHeight: 'calc(100vh - 56px)' }}>
-
       <div style={{ flex: 1 }}>
-        {navItems.map((item, i) => {
-          if ('section' in item) {
-            return <p key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 18px 4px', margin: 0 }}>{item.section}</p>
-          }
-          const active  = path === item.href || (item.href !== '/dashboard' && path.startsWith(item.href))
-          const isAI    = item.icon === 'ai'
-          const isTruck = item.icon === 'truck'
-          return (
-            <Link key={item.href} href={item.href}
-              style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 18px', margin: '1px 8px', borderRadius: 6, fontSize: 13, fontWeight: active ? 600 : 400, color: active ? '#166534' : '#374151', background: active ? '#dcfce7' : 'transparent', textDecoration: 'none' }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                stroke={isAI && !active ? '#4CAF7D' : isTruck && !active ? '#4A90C4' : 'currentColor'}
-                strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-                style={{ flexShrink: 0, opacity: active ? 1 : 0.6 }}>
-                <path d={icons[item.icon]} />
-              </svg>
-              <span style={{ flex: 1 }}>{item.label}</span>
-              {isAI && !active && (
-                <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: 'rgba(76,175,125,0.12)', color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.3)' }}>AI</span>
-              )}
-              {item.badge && alertCount > 0 && (
-                <span style={{ background: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10 }}>{alertCount}</span>
-              )}
-            </Link>
-          )
-        })}
+        {modulesLoading ? (
+          <div style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[...Array(8)].map((_, i) => (
+              <div key={i} style={{ height: 32, borderRadius: 6, background: '#f0f4f0', animation: 'pulse 1.5s ease-in-out infinite', opacity: 1 - i * 0.08 }} />
+            ))}
+            <style>{`@keyframes pulse{0%,100%{opacity:0.6}50%{opacity:1}}`}</style>
+          </div>
+        ) : (
+          sidebarGroups.map(group => (
+            <div key={group.section}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 18px 4px', margin: 0 }}>
+                {group.section}
+              </p>
+              {group.items.map(item => renderItem(item))}
+            </div>
+          ))
+        )}
       </div>
 
       <div style={{ padding: '8px 10px', borderTop: '0.5px solid #e5e7eb' }}>
@@ -121,14 +117,11 @@ export default function SidebarNav() {
       </div>
 
       <div style={{ margin: '8px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
-
         {/* Mill selector */}
         <div>
           <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Feed mill</p>
           <div style={{ position: 'relative' }}>
-            <select
-              value={selectedMillId}
-              onChange={e => { setSelectedMillId(e.target.value); setDropdownOpen(false) }}
+            <select value={selectedMillId} onChange={e => { setSelectedMillId(e.target.value); setDropdownOpen(false) }}
               style={{ width: '100%', padding: '8px 28px 8px 10px', background: '#f9fafb', border: '1px solid ' + (selectedMillId ? '#4A90C4' : '#e5e7eb'), borderRadius: 7, fontSize: 12, color: '#111827', fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}>
               <option value="">All mills ({farms.length})</option>
               {feedMills.map(m => {
@@ -158,7 +151,7 @@ export default function SidebarNav() {
             </p>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {loading ? 'Loading...' : currentFarm?.name ?? 'Select farm'}
+                {farmLoading ? 'Loading...' : currentFarm?.name ?? 'Select farm'}
               </span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5"
                 style={{ flexShrink: 0, transform: dropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
@@ -179,7 +172,7 @@ export default function SidebarNav() {
                     {visibleFarms.length} farm{visibleFarms.length !== 1 ? 's' : ''}{selectedMillId ? ' — filtered' : ''}
                   </span>
                 </div>
-                {loading ? (
+                {farmLoading ? (
                   <div style={{ padding: '12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>Loading...</div>
                 ) : visibleFarms.length === 0 ? (
                   <div style={{ padding: '12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>No farms for this mill</div>
