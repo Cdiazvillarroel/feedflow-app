@@ -42,20 +42,24 @@ export default function AdminUsersPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [rolesR, clientsR, clientUsersR, farmsR, userFarmsR] = await Promise.all([
+    const [rolesR, clientsR, clientUsersR, farmsR, userFarmsRes] = await Promise.all([
       supabase.from('roles').select('user_id, role'),
       supabase.from('clients').select('id, name').order('name'),
       supabase.from('client_users').select('user_id, client_id, clients(name)'),
       supabase.from('farms').select('id, name, location, client_id').order('name'),
-      supabase.from('user_farms').select('user_id, farm_id'),
+      fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'list_all_user_farms' }),
+      }).then(r => r.json()),
     ])
 
     setClients(clientsR.data || [])
     setFarms(farmsR.data || [])
 
-    // Build user_farms map
+    // Build user_farms map from API response
     const ufMap: Record<string, string[]> = {}
-    ;(userFarmsR.data || []).forEach((r: any) => {
+    ;(userFarmsRes.user_farms || []).forEach((r: any) => {
       if (!ufMap[r.user_id]) ufMap[r.user_id] = []
       ufMap[r.user_id].push(r.farm_id)
     })
