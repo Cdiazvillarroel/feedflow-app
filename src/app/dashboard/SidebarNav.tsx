@@ -1,7 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useFarm } from './FarmContext'
 import { supabase } from '@/lib/supabase'
 import { useClientModules } from '@/hooks/useClientModules'
@@ -35,7 +35,7 @@ export default function SidebarNav() {
   const router = useRouter()
   const { farms, visibleFarms, currentFarm, setCurrentFarm, selectedMillId, setSelectedMillId, loading: farmLoading } = useFarm()
   const [dropdownOpen, setDropdownOpen] = useState(false)
-  const [feedMills,    setFeedMills]    = useState<FeedMill[]>([])
+  const [allFeedMills, setAllFeedMills] = useState<FeedMill[]>([])
   const [alertCount,   setAlertCount]   = useState(0)
   const [userId,       setUserId]       = useState<string | null>(null)
 
@@ -43,11 +43,26 @@ export default function SidebarNav() {
 
   useEffect(() => {
     supabase.from('feed_mills').select('id, name').order('name')
-      .then(({ data }) => setFeedMills(data || []))
+      .then(({ data }) => setAllFeedMills(data || []))
     supabase.from('alerts').select('id', { count: 'exact', head: true }).eq('acknowledged', false)
       .then(({ count }) => setAlertCount(count || 0))
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null))
   }, [])
+
+  // Filter mills to only those assigned to the client's farms
+  const clientMillIds = useMemo(() => {
+    const ids = new Set<string>()
+    farms.forEach(f => { if (f.feed_mill_id) ids.add(f.feed_mill_id) })
+    return ids
+  }, [farms])
+
+  const feedMills = useMemo(() =>
+    allFeedMills.filter(m => clientMillIds.has(m.id)),
+    [allFeedMills, clientMillIds]
+  )
+
+  // Only show mill selector if there are mills assigned
+  const showMillSelector = feedMills.length > 0
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -85,68 +100,43 @@ export default function SidebarNav() {
   }
 
   return (
-    <aside style={{ width: 220, minWidth: 220, background: '#ffffff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', padding: '16px 0 0', overflowY: 'auto', flexShrink: 0, minHeight: 'calc(100vh - 56px)' }}>
-      <div style={{ flex: 1 }}>
-        {modulesLoading ? (
-          <div style={{ padding: '20px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[...Array(8)].map((_, i) => (
-              <div key={i} style={{ height: 32, borderRadius: 6, background: '#f0f4f0', animation: 'pulse 1.5s ease-in-out infinite', opacity: 1 - i * 0.08 }} />
-            ))}
-            <style>{`@keyframes pulse{0%,100%{opacity:0.6}50%{opacity:1}}`}</style>
-          </div>
-        ) : (
-          sidebarGroups.map(group => (
-            <div key={group.section}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 18px 4px', margin: 0 }}>
-                {group.section}
-              </p>
-              {group.items.map(item => renderItem(item))}
+    <aside style={{ width: 220, minWidth: 220, background: '#ffffff', borderRight: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', padding: '0', overflowY: 'auto', flexShrink: 0, minHeight: 'calc(100vh - 56px)' }}>
+
+      {/* ═══ TOP: FARM & MILL SELECTORS ═══ */}
+      <div style={{ padding: '12px 10px 8px', borderBottom: '0.5px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+        {/* Mill selector — only if client has mills */}
+        {showMillSelector && (
+          <div>
+            <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Feed mill</p>
+            <div style={{ position: 'relative' }}>
+              <select value={selectedMillId} onChange={e => setSelectedMillId(e.target.value)}
+                style={{ width: '100%', padding: '7px 28px 7px 10px', background: '#f9fafb', border: '1px solid ' + (selectedMillId ? '#4A90C4' : '#e5e7eb'), borderRadius: 7, fontSize: 12, color: '#111827', fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}>
+                <option value="">All mills ({feedMills.length})</option>
+                {feedMills.map(m => {
+                  const count = farms.filter(f => f.feed_mill_id === m.id).length
+                  return <option key={m.id} value={m.id}>{m.name} ({count})</option>
+                })}
+              </select>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5"
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
             </div>
-          ))
-        )}
-      </div>
-
-      <div style={{ padding: '8px 10px', borderTop: '0.5px solid #e5e7eb' }}>
-        <button onClick={handleLogout}
-          style={{ width: '100%', padding: '8px 12px', background: 'transparent', border: '0.5px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#6a7a8a', fontFamily: 'inherit' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
-          </svg>
-          Sign out
-        </button>
-      </div>
-
-      <div style={{ margin: '8px 10px 12px', display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
-        {/* Mill selector */}
-        <div>
-          <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Feed mill</p>
-          <div style={{ position: 'relative' }}>
-            <select value={selectedMillId} onChange={e => { setSelectedMillId(e.target.value); setDropdownOpen(false) }}
-              style={{ width: '100%', padding: '8px 28px 8px 10px', background: '#f9fafb', border: '1px solid ' + (selectedMillId ? '#4A90C4' : '#e5e7eb'), borderRadius: 7, fontSize: 12, color: '#111827', fontFamily: 'inherit', cursor: 'pointer', appearance: 'none', WebkitAppearance: 'none' }}>
-              <option value="">All mills ({farms.length})</option>
-              {feedMills.map(m => {
-                const count = (farms as any[]).filter(f => f.feed_mill_id === m.id).length
-                return <option key={m.id} value={m.id}>{m.name} ({count})</option>
-              })}
-            </select>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5"
-              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
+            {selectedMillId && (
+              <button onClick={() => setSelectedMillId('')}
+                style={{ fontSize: 10, color: '#4A90C4', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit' }}>
+                ✕ Clear mill filter
+              </button>
+            )}
           </div>
-          {selectedMillId && (
-            <button onClick={() => setSelectedMillId('')}
-              style={{ fontSize: 10, color: '#4A90C4', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit' }}>
-              ✕ Clear mill filter
-            </button>
-          )}
-        </div>
+        )}
 
         {/* Farm selector */}
         <div style={{ position: 'relative' }}>
           <button onClick={() => setDropdownOpen(prev => !prev)}
-            style={{ width: '100%', padding: '10px 12px', background: '#f9fafb', border: '1px solid ' + (dropdownOpen ? '#4CAF7D' : '#e5e7eb'), borderRadius: 8, cursor: 'pointer', textAlign: 'left' }}>
-            <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 3px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            style={{ width: '100%', padding: '8px 10px', background: '#f9fafb', border: '1px solid ' + (dropdownOpen ? '#4CAF7D' : '#e5e7eb'), borderRadius: 8, cursor: 'pointer', textAlign: 'left' }}>
+            <p style={{ fontSize: 10, color: '#9ca3af', margin: '0 0 3px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
               Current farm {selectedMillId ? '· filtered' : ''}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
@@ -166,7 +156,7 @@ export default function SidebarNav() {
           {dropdownOpen && (
             <>
               <div onClick={() => setDropdownOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
-              <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 -8px 24px rgba(0,0,0,0.10)', overflow: 'hidden', zIndex: 100, maxHeight: 320, overflowY: 'auto' }}>
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.10)', overflow: 'hidden', zIndex: 100, maxHeight: 320, overflowY: 'auto' }}>
                 <div style={{ padding: '8px 12px 6px', borderBottom: '0.5px solid #f0f4f0', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
                   <span style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 600 }}>
                     {visibleFarms.length} farm{visibleFarms.length !== 1 ? 's' : ''}{selectedMillId ? ' — filtered' : ''}
@@ -202,6 +192,38 @@ export default function SidebarNav() {
             </>
           )}
         </div>
+      </div>
+
+      {/* ═══ NAVIGATION ═══ */}
+      <div style={{ flex: 1, paddingTop: 4 }}>
+        {modulesLoading ? (
+          <div style={{ padding: '12px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[...Array(8)].map((_, i) => (
+              <div key={i} style={{ height: 32, borderRadius: 6, background: '#f0f4f0', animation: 'pulse 1.5s ease-in-out infinite', opacity: 1 - i * 0.08 }} />
+            ))}
+            <style>{`@keyframes pulse{0%,100%{opacity:0.6}50%{opacity:1}}`}</style>
+          </div>
+        ) : (
+          sidebarGroups.map(group => (
+            <div key={group.section}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em', padding: '12px 18px 4px', margin: 0 }}>
+                {group.section}
+              </p>
+              {group.items.map(item => renderItem(item))}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* ═══ BOTTOM: SIGN OUT ═══ */}
+      <div style={{ padding: '8px 10px 12px', borderTop: '0.5px solid #e5e7eb' }}>
+        <button onClick={handleLogout}
+          style={{ width: '100%', padding: '8px 12px', background: 'transparent', border: '0.5px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#6a7a8a', fontFamily: 'inherit' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+          </svg>
+          Sign out
+        </button>
       </div>
     </aside>
   )
