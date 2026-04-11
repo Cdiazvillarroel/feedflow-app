@@ -21,6 +21,13 @@ const navItems = [
   { href: '/dashboard/costs',     label: 'Feed costs',   icon: 'dollar' },
   { href: '/dashboard/animals',   label: 'Animals',     icon: 'users' },
   { href: '/dashboard/sensors',   label: 'Sensors',     icon: 'wifi' },
+
+  { section: 'NUTRITION' },
+  { href: '/dashboard/nutrition',           label: 'Overview',          icon: 'nutrition' },
+  { href: '/dashboard/nutrition/library',   label: 'Commodity Library', icon: 'grain'     },
+  { href: '/dashboard/nutrition/formulas',  label: 'Formula Manager',   icon: 'formula'   },
+  { href: '/dashboard/nutrition/forecast',  label: 'Demand Forecast',   icon: 'forecast'  },  
+  
   { section: 'Logistics' },
   { href: '/dashboard/logistics',         label: 'Farm Monitor',  icon: 'truck'     },
   { href: '/dashboard/logistics/orders',  label: 'Orders',        icon: 'clipboard' },
@@ -46,6 +53,8 @@ const icons: Record<string, string> = {
   driver:    'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   settings:  'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
   grain: 'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zM8 12h8M12 8v8',
+  nutrition: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zM8 12h8M12 8v8',
+  formula:   'M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18',
 }
 
 export default function SidebarNav() {
