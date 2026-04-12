@@ -143,7 +143,8 @@ export default function SidebarNav() {
     <aside style={{
       width: 230, minWidth: 230, background: T.bgSidebar,
       display: 'flex', flexDirection: 'column',
-      flexShrink: 0, minHeight: 'calc(100vh - 56px)',
+      flexShrink: 0, height: '100vh',
+      position: 'sticky', top: 0,
       fontFamily: T.font,
     }}>
 
