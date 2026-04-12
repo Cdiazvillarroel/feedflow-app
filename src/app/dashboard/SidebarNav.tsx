@@ -148,10 +148,8 @@ export default function SidebarNav() {
     }}>
 
       {/* ═══ LOGO ═══ */}
-      <div style={{ padding: '22px 20px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: -0.5 }}>
-          Feed<span style={{ color: T.accent }}>Flow</span>
-        </div>
+      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'center' }}>
+        <img src="/logo-feedflow.png" alt="FeedFlow" style={{ height: 32, width: 'auto', objectFit: 'contain' }} />
       </div>
 
       {/* ═══ FARM SELECTOR ═══ */}
