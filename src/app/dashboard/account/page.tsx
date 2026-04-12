@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getActiveFarmId } from '@/lib/queries'
+import { useFarm } from '@/app/dashboard/FarmContext'
 
 interface Farm        { id: string; name: string; location: string | null; lat: number | null; lng: number | null; timezone: string }
 interface Silo        { id: string; farm_id: string; name: string; material: string | null; capacity_kg: number; digitplan_silo_id: number | null; active: boolean }
@@ -24,6 +24,9 @@ function labelStyle(): React.CSSProperties {
 }
 
 export default function AccountPage() {
+  const { farms: userFarms, currentFarm } = useFarm()
+  const activeFarmId = currentFarm?.id || ''
+
   const [tab,     setTab]     = useState<Tab>('silos')
   const [farms,   setFarms]   = useState<Farm[]>([])
   const [silos,   setSilos]   = useState<Silo[]>([])
@@ -35,41 +38,48 @@ export default function AccountPage() {
   const [userId,  setUserId]  = useState<string | null>(null)
   const [userEmail, setUserEmail] = useState('')
 
-  const activeFarmId = getActiveFarmId()
-
-  useEffect(() => { init() }, [])
+  useEffect(() => { if (userFarms.length > 0) init() }, [userFarms])
 
   async function init() {
     setLoading(true)
+
+    // Get user's farm IDs from FarmContext (already filtered by user_farms/client_users)
+    const farmIds = userFarms.map(f => f.id)
 
     // Get current user and their role on active farm
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       setUserId(user.id)
       setUserEmail(user.email || '')
-      const { data: uf } = await supabase
-        .from('user_farms')
-        .select('role')
-        .eq('user_id', user.id)
-        .eq('farm_id', activeFarmId)
-        .single()
-      const userRole = (uf?.role || 'viewer') as Role
-      setRole(userRole)
-
-      // Set default tab based on role
-      if (userRole === 'owner') setTab('farms')
-      else setTab('silos')
+      if (activeFarmId) {
+        const { data: uf } = await supabase
+          .from('user_farms')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('farm_id', activeFarmId)
+          .single()
+        const userRole = (uf?.role || 'viewer') as Role
+        setRole(userRole)
+        if (userRole === 'owner') setTab('farms')
+        else setTab('silos')
+      }
     }
 
+    // Load data ONLY for the user's farms
     const [f, s, sen, a] = await Promise.all([
-      supabase.from('farms').select('*').order('name'),
-      supabase.from('silos').select('*').order('name'),
-      supabase.from('sensors').select('*'),
-      supabase.from('animal_groups').select('*').order('name'),
+      supabase.from('farms').select('*').in('id', farmIds).order('name'),
+      supabase.from('silos').select('*').in('farm_id', farmIds).order('name'),
+      supabase.from('sensors').select('*, silos!inner(farm_id)').in('silos.farm_id', farmIds),
+      supabase.from('animal_groups').select('*').in('farm_id', farmIds).order('name'),
     ])
+
     setFarms(f.data || [])
     setSilos(s.data || [])
-    setSensors(sen.data || [])
+    // Clean sensor data (remove the joined silos object)
+    setSensors((sen.data || []).map((s: any) => {
+      const { silos, ...sensor } = s
+      return sensor
+    }))
     setAnimals(a.data || [])
     setLoading(false)
   }
@@ -181,22 +191,12 @@ function ProfileTab({ userId, userEmail, onMsg }: { userId: string | null; userE
               <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 2 }}>Manager</div>
             </div>
           </div>
-
           <div style={{ height: '0.5px', background: '#e8ede9' }} />
-
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#1a2530', marginBottom: 14 }}>Change password</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <label style={labelStyle()}>New password</label>
-                <input type="password" style={inputStyle(true)} value={newPass}
-                  onChange={e => setNewPass(e.target.value)} placeholder="Min 6 characters" />
-              </div>
-              <div>
-                <label style={labelStyle()}>Confirm password</label>
-                <input type="password" style={inputStyle(true)} value={confirmPass}
-                  onChange={e => setConfirmPass(e.target.value)} placeholder="Repeat new password" />
-              </div>
+              <div><label style={labelStyle()}>New password</label><input type="password" style={inputStyle(true)} value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="Min 6 characters" /></div>
+              <div><label style={labelStyle()}>Confirm password</label><input type="password" style={inputStyle(true)} value={confirmPass} onChange={e => setConfirmPass(e.target.value)} placeholder="Repeat new password" /></div>
               {error && <div style={{ background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#A32D2D' }}>{error}</div>}
               <button onClick={savePassword} disabled={saving || !newPass || !confirmPass}
                 style={{ padding: '9px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -492,10 +492,7 @@ function SensorsTab({ sensors, silos, farms, onRefresh, onMsg, canEdit }: { sens
                 {filteredSilos.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-            <div>
-              <label style={labelStyle()}>Serial number *</label>
-              <input style={inputStyle(true)} value={form.serial} onChange={e => setForm(p => ({ ...p, serial: e.target.value }))} placeholder="SM-R101" />
-            </div>
+            <div><label style={labelStyle()}>Serial number *</label><input style={inputStyle(true)} value={form.serial} onChange={e => setForm(p => ({ ...p, serial: e.target.value }))} placeholder="SM-R101" /></div>
             <div><label style={labelStyle()}>Model</label><input style={inputStyle(true)} value={form.model} onChange={e => setForm(p => ({ ...p, model: e.target.value }))} placeholder="SiloMetric Laser" /></div>
             <div><label style={labelStyle()}>Firmware</label><input style={inputStyle(true)} value={form.firmware} onChange={e => setForm(p => ({ ...p, firmware: e.target.value }))} placeholder="v3.1.2" /></div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -617,34 +614,31 @@ function AnimalsTab({ animals, farms, onRefresh, onMsg, activeFarmId, canEdit }:
 
 // ── USERS TAB ─────────────────────────────────────────────────────────────────
 function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void }) {
-  interface UserRow {
-    id:         string
-    email:      string
-    created_at: string
-    user_farms: { farm_id: string; role: string; farm_name: string }[]
-  }
-
+  interface UserRow { id: string; email: string; created_at: string; user_farms: { farm_id: string; role: string; farm_name: string }[] }
   const empty = { email: '', password: '', role: 'viewer', farm_ids: [] as string[] }
-  const [users,      setUsers]      = useState<UserRow[]>([])
-  const [form,       setForm]       = useState(empty)
-  const [loading,    setLoading]    = useState(true)
-  const [saving,     setSaving]     = useState(false)
-  const [error,      setError]      = useState('')
-  const [drawer,     setDrawer]     = useState<UserRow | null>(null)
-  const [editPass,   setEditPass]   = useState('')
-  const [editFarms,  setEditFarms]  = useState<any[]>([])
+  const [users, setUsers] = useState<UserRow[]>([])
+  const [form, setForm] = useState(empty)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [drawer, setDrawer] = useState<UserRow | null>(null)
+  const [editPass, setEditPass] = useState('')
+  const [editFarms, setEditFarms] = useState<any[]>([])
   const [savingEdit, setSavingEdit] = useState(false)
 
   useEffect(() => { loadUsers() }, [])
 
   async function loadUsers() {
     setLoading(true)
-    const res      = await fetch(`/api/admin/list-users?t=${Date.now()}`, { cache: 'no-store' })
+    const res = await fetch(`/api/admin/list-users?t=${Date.now()}`, { cache: 'no-store' })
     const authData = await res.json()
-    const rows     = authData.users || []
-    setUsers([])
-    await new Promise(r => setTimeout(r, 50))
-    setUsers(rows)
+    const rows = authData.users || []
+    // Filter users to only those with access to the current client's farms
+    const farmIds = new Set(farms.map(f => f.id))
+    const filtered = rows.filter((u: UserRow) =>
+      u.user_farms.some(uf => farmIds.has(uf.farm_id))
+    )
+    setUsers(filtered)
     setLoading(false)
   }
 
@@ -679,7 +673,7 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
 
   async function removeUser(userId: string, email: string) {
     if (!confirm(`Remove user ${email}?`)) return
-    const res  = await fetch('/api/admin/delete-user', {
+    const res = await fetch('/api/admin/delete-user', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ user_id: userId }),
     })
@@ -694,7 +688,7 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
       setError('Email, password and at least one farm are required'); return
     }
     setSaving(true); setError('')
-    const res  = await fetch('/api/admin/create-user', {
+    const res = await fetch('/api/admin/create-user', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: form.email, password: form.password, role: form.role, farm_ids: form.farm_ids }),
     })
@@ -702,23 +696,14 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
     if (data.error) { setError(data.error); setSaving(false); return }
     onMsg('User created')
     setForm(empty); setSaving(false)
-    let attempts = 0
-    const tryLoad = async () => {
-      attempts++
-      await loadUsers()
-      const res2    = await fetch(`/api/admin/list-users?t=${Date.now()}`, { cache: 'no-store' })
-      const data2   = await res2.json()
-      const newUser = (data2.users || []).find((u: any) => u.email === form.email)
-      if (!newUser && attempts < 5) { await new Promise(r => setTimeout(r, 1000)); await tryLoad() }
-    }
     await new Promise(r => setTimeout(r, 500))
-    await tryLoad()
+    await loadUsers()
   }
 
   const roleBadge = (r: string) =>
-    r === 'owner'   ? { bg: '#eaf5ee', color: '#27500A' } :
+    r === 'owner' ? { bg: '#eaf5ee', color: '#27500A' } :
     r === 'manager' ? { bg: '#E6F1FB', color: '#0C447C' } :
-                      { bg: '#f0f4f0', color: '#6a7a8a'  }
+    { bg: '#f0f4f0', color: '#6a7a8a' }
 
   return (
     <>
@@ -836,14 +821,9 @@ function UsersTab({ farms, onMsg }: { farms: Farm[]; onMsg: (m: string) => void 
               <select style={{ ...inputStyle(true) }} value={form.role} onChange={e => setForm(p => ({ ...p, role: e.target.value }))}>
                 {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
-              <div style={{ fontSize: 11, color: '#aab8c0', marginTop: 6, lineHeight: 1.6 }}>
-                <strong style={{ color: '#1a2530' }}>Owner</strong> — full access &nbsp;·&nbsp;
-                <strong style={{ color: '#1a2530' }}>Manager</strong> — edit only &nbsp;·&nbsp;
-                <strong style={{ color: '#1a2530' }}>Viewer</strong> — read only
-              </div>
             </div>
             <div>
-              <label style={labelStyle()}>Assign farms * (select at least one)</label>
+              <label style={labelStyle()}>Assign farms *</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
                 {farms.map(f => {
                   const checked = form.farm_ids.includes(f.id)
