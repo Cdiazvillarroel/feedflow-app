@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useFarm } from '@/app/dashboard/FarmContext'
 
-interface FeedMill { id: string; name: string }
-interface Farm     { id: string; name: string; location: string | null }
+interface FeedMill { id: string; name: string; location: string | null; contact_phone: string | null; contact_email: string | null }
+interface Client   { id: string; name: string; abn: string | null }
+interface Farm     { id: string; name: string; location: string | null; client_id: string | null }
 interface Silo     { id: string; farm_id: string; name: string; material: string | null; capacity_kg: number }
 interface SiloStat { silo_id: string; level_pct: number; kg_remaining: number; alert_level: string }
 interface Driver   { id: string; name: string; feed_mill_id: string }
@@ -41,6 +42,7 @@ function SecTitle({ title }: { title: string }) {
 export default function OrdersPage() {
   const { selectedMillId } = useFarm()
   const [feedMills,  setFeedMills]  = useState<FeedMill[]>([])
+  const [clients,    setClients]    = useState<Client[]>([])
   const [farms,      setFarms]      = useState<Farm[]>([])
   const [silos,      setSilos]      = useState<Silo[]>([])
   const [siloStats,  setSiloStats]  = useState<SiloStat[]>([])
@@ -63,9 +65,10 @@ export default function OrdersPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [fmR, farmsR, silosR, statsR, driversR, trucksR, ordersR, itemsR] = await Promise.all([
-      supabase.from('feed_mills').select('id, name').order('name'),
-      supabase.from('farms').select('id, name, location').order('name'),
+    const [fmR, clientsR, farmsR, silosR, statsR, driversR, trucksR, ordersR, itemsR] = await Promise.all([
+      supabase.from('feed_mills').select('id, name, location, contact_phone, contact_email').order('name'),
+      supabase.from('clients').select('id, name, abn').order('name'),
+      supabase.from('farms').select('id, name, location, client_id').order('name'),
       supabase.from('silos').select('*').order('name'),
       supabase.from('silo_latest_readings').select('*'),
       supabase.from('drivers').select('id, name, feed_mill_id').order('name'),
@@ -74,6 +77,7 @@ export default function OrdersPage() {
       supabase.from('delivery_order_items').select('*'),
     ])
     setFeedMills(fmR.data || [])
+    setClients(clientsR.data || [])
     setFarms(farmsR.data || [])
     setSilos(silosR.data || [])
     setSiloStats(statsR.data || [])
@@ -153,13 +157,198 @@ export default function OrdersPage() {
     setDrawer(null); showMsg('Order deleted'); loadAll()
   }
 
+  // ─── PRINT ORDER DOCUMENT ─────────────────────────────────────────────
+  function printOrder(order: DeliveryOrder) {
+    const items   = orderItems.filter(i => i.delivery_order_id === order.id)
+    const mill    = feedMills.find(m => m.id === order.feed_mill_id)
+    const farm    = farms.find(f => f.id === order.farm_id)
+    const client  = farm?.client_id ? clients.find(c => c.id === farm.client_id) : null
+    const driver  = order.driver_id ? drivers.find(d => d.id === order.driver_id) : null
+    const truck   = order.truck_id  ? trucks.find(t => t.id === order.truck_id) : null
+    const totalKg = items.reduce((sum, i) => sum + i.kg_requested, 0)
+    const totalDelivered = items.reduce((sum, i) => sum + i.kg_delivered, 0)
+    const sc      = STATUS_COLORS[order.status] || STATUS_COLORS.pending
+
+    const orderNumber   = order.id.slice(0, 8).toUpperCase()
+    const scheduledDate = order.scheduled_at
+      ? new Date(order.scheduled_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+      : '—'
+    const createdDate = new Date(order.created_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+    const deliveredDate = order.delivered_at
+      ? new Date(order.delivered_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })
+      : null
+
+    const printWindow = window.open('', '_blank', 'width=800,height=1000')
+    if (!printWindow) return
+
+    const itemsHTML = items.map((item, idx) => {
+      const silo = silos.find(s => s.id === item.silo_id)
+      return `
+        <tr>
+          <td style="padding:12px;border-bottom:1px solid #f0f4f0;font-size:13px;color:#6a7a8a">${idx + 1}</td>
+          <td style="padding:12px;border-bottom:1px solid #f0f4f0">
+            <div style="font-size:13px;font-weight:600;color:#1a2530">${silo?.name || '—'}</div>
+            <div style="font-size:11px;color:#8a9aaa;margin-top:1px">${item.material || silo?.material || '—'}</div>
+          </td>
+          <td style="padding:12px;border-bottom:1px solid #f0f4f0;text-align:right;font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">${Math.round(item.kg_requested).toLocaleString()}</td>
+          <td style="padding:12px;border-bottom:1px solid #f0f4f0;text-align:right;font-size:13px;font-variant-numeric:tabular-nums;color:${item.kg_delivered > 0 ? '#1a2530' : '#aab8c0'}">${item.kg_delivered > 0 ? Math.round(item.kg_delivered).toLocaleString() : '—'}</td>
+        </tr>
+      `
+    }).join('')
+
+    printWindow.document.write(`<!DOCTYPE html>
+<html>
+<head>
+  <title>Delivery Order ${orderNumber} — FeedFlow</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a2530; padding: 40px; max-width: 800px; margin: 0 auto; }
+    @media print {
+      body { padding: 20px; }
+      .no-print { display: none !important; }
+      @page { margin: 15mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="margin-bottom:24px;display:flex;gap:10px;justify-content:flex-end">
+    <button onclick="window.print()" style="padding:10px 24px;background:#4CAF7D;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">
+      🖨 Print
+    </button>
+    <button onclick="window.close()" style="padding:10px 24px;background:#f7f9f8;color:#6a7a8a;border:0.5px solid #e8ede9;border-radius:8px;font-size:14px;cursor:pointer">
+      Close
+    </button>
+  </div>
+
+  <!-- HEADER -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:28px;padding-bottom:18px;border-bottom:2px solid #1a2530">
+    <div>
+      <div style="font-size:24px;font-weight:700;color:#4CAF7D;letter-spacing:-0.5px">FeedFlow</div>
+      <div style="font-size:11px;color:#8a9aaa;margin-top:2px">Livestock Feed Management</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:20px;font-weight:700;color:#1a2530">Delivery Order</div>
+      <div style="font-size:14px;color:#4CAF7D;font-weight:600;margin-top:2px">#${orderNumber}</div>
+      <div style="font-size:12px;color:#8a9aaa;margin-top:4px">Created: ${createdDate}</div>
+    </div>
+  </div>
+
+  <!-- FROM / TO -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px">
+    <div style="padding:16px;background:#f7f9f8;border-radius:8px;border:1px solid #e8ede9">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;margin-bottom:8px">From — Feed Mill</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px">${mill?.name || '—'}</div>
+      <div style="font-size:12px;color:#6a7a8a;line-height:1.6">
+        ${mill?.location || ''}${mill?.contact_phone ? '<br>' + mill.contact_phone : ''}${mill?.contact_email ? '<br>' + mill.contact_email : ''}
+      </div>
+    </div>
+    <div style="padding:16px;background:#f7f9f8;border-radius:8px;border:1px solid #e8ede9">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;margin-bottom:8px">To — Destination Farm</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px">${farm?.name || '—'}</div>
+      <div style="font-size:12px;color:#6a7a8a;line-height:1.6">
+        ${farm?.location || ''}
+        ${client ? '<br>' + client.name : ''}
+        ${client?.abn ? '<br>ABN: ' + client.abn : ''}
+      </div>
+    </div>
+  </div>
+
+  <!-- ORDER INFO -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:28px">
+    <div style="padding:12px 16px;border:1px solid #e8ede9;border-radius:8px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;margin-bottom:4px">Status</div>
+      <span style="display:inline-block;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:600;background:${sc.bg};color:${sc.color}">${sc.label}</span>
+    </div>
+    <div style="padding:12px 16px;border:1px solid #e8ede9;border-radius:8px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;margin-bottom:4px">Scheduled</div>
+      <div style="font-size:14px;font-weight:600">${scheduledDate}</div>
+    </div>
+    <div style="padding:12px 16px;border:1px solid #e8ede9;border-radius:8px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;margin-bottom:4px">Driver</div>
+      <div style="font-size:14px;font-weight:600">${driver?.name || 'Unassigned'}</div>
+    </div>
+    <div style="padding:12px 16px;border:1px solid #e8ede9;border-radius:8px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;margin-bottom:4px">Truck</div>
+      <div style="font-size:14px;font-weight:600">${truck?.name || 'Unassigned'}</div>
+      ${truck ? `<div style="font-size:11px;color:#8a9aaa;margin-top:2px">${truck.plate || ''} · ${(truck.capacity_kg / 1000).toFixed(0)}t capacity</div>` : ''}
+    </div>
+  </div>
+
+  ${deliveredDate ? `
+    <div style="padding:12px 16px;background:#eaf5ee;border:1px solid #4CAF7D33;border-radius:8px;margin-bottom:24px;font-size:13px;color:#27500A">
+      <strong>Delivered:</strong> ${deliveredDate}
+    </div>
+  ` : ''}
+
+  <!-- ITEMS TABLE -->
+  <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+    <thead>
+      <tr>
+        <th style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;text-align:left;padding:10px 12px;border-bottom:2px solid #e8ede9;width:40px">#</th>
+        <th style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;text-align:left;padding:10px 12px;border-bottom:2px solid #e8ede9">Silo / Material</th>
+        <th style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;text-align:right;padding:10px 12px;border-bottom:2px solid #e8ede9">Requested (kg)</th>
+        <th style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;text-align:right;padding:10px 12px;border-bottom:2px solid #e8ede9">Delivered (kg)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsHTML}
+    </tbody>
+  </table>
+
+  <!-- TOTAL -->
+  <div style="display:flex;justify-content:flex-end;gap:40px;padding:16px 12px;border-top:2px solid #1a2530;margin-bottom:28px">
+    <div style="text-align:right">
+      <div style="font-size:11px;color:#8a9aaa;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Total requested</div>
+      <div style="font-size:20px;font-weight:700;color:#1a2530">${(totalKg / 1000).toFixed(1)} t <span style="font-size:13px;font-weight:400;color:#8a9aaa">(${Math.round(totalKg).toLocaleString()} kg)</span></div>
+    </div>
+    ${totalDelivered > 0 ? `
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#8a9aaa;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px">Total delivered</div>
+        <div style="font-size:20px;font-weight:700;color:#4CAF7D">${(totalDelivered / 1000).toFixed(1)} t <span style="font-size:13px;font-weight:400;color:#8a9aaa">(${Math.round(totalDelivered).toLocaleString()} kg)</span></div>
+      </div>
+    ` : ''}
+  </div>
+
+  ${order.notes ? `
+    <div style="padding:16px;background:#f7f9f8;border-radius:8px;border:1px solid #e8ede9;margin-bottom:40px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#8a9aaa;margin-bottom:6px">Notes</div>
+      <div style="font-size:13px;color:#1a2530;line-height:1.6">${order.notes}</div>
+    </div>
+  ` : ''}
+
+  <!-- SIGNATURES -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:60px">
+    <div>
+      <div style="border-top:1px solid #1a2530;padding-top:8px">
+        <div style="font-size:11px;color:#8a9aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.4px">Dispatched by (Mill)</div>
+        <div style="font-size:10px;color:#c8d8cc;margin-top:4px">Name / Signature / Date</div>
+      </div>
+    </div>
+    <div>
+      <div style="border-top:1px solid #1a2530;padding-top:8px">
+        <div style="font-size:11px;color:#8a9aaa;font-weight:600;text-transform:uppercase;letter-spacing:0.4px">Received by (Farm)</div>
+        <div style="font-size:10px;color:#c8d8cc;margin-top:4px">Name / Signature / Date</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div style="margin-top:40px;padding-top:16px;border-top:1px solid #e8ede9;text-align:center;font-size:10px;color:#aab8c0">
+    Generated by FeedFlow · ${new Date().toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+  </div>
+</body>
+</html>`)
+    printWindow.document.close()
+  }
+  // ─── END PRINT ─────────────────────────────────────────────────────────
+
   const isEdit = drawer && drawer !== 'new'
 
   const filtered = orders.filter(o => {
-  const matchMill   = !selectedMillId || o.feed_mill_id === selectedMillId
-  const matchStatus = filterStatus === 'all' || o.status === filterStatus
-  const matchSearch = !search || farmName(o.farm_id).toLowerCase().includes(search.toLowerCase()) || millName(o.feed_mill_id).toLowerCase().includes(search.toLowerCase())
-  return matchMill && matchStatus && matchSearch
+    const matchMill   = !selectedMillId || o.feed_mill_id === selectedMillId
+    const matchStatus = filterStatus === 'all' || o.status === filterStatus
+    const matchSearch = !search || farmName(o.farm_id).toLowerCase().includes(search.toLowerCase()) || millName(o.feed_mill_id).toLowerCase().includes(search.toLowerCase())
+    return matchMill && matchStatus && matchSearch
   })
 
   const counts = Object.keys(STATUS_COLORS).reduce((acc, k) => {
@@ -335,11 +524,18 @@ export default function OrdersPage() {
               )}
             </div>
 
+            {/* DRAWER FOOTER */}
             <div style={{ padding: '16px 24px', borderTop: '0.5px solid #e8ede9', display: 'flex', gap: 10 }}>
               <button onClick={save} disabled={saving || !form.feed_mill_id || !form.farm_id}
                 style={{ flex: 1, padding: '10px', background: saving ? '#aab8c0' : '#4CAF7D', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>
                 {saving ? 'Saving...' : isEdit ? 'Update order' : 'Create order'}
               </button>
+              {isEdit && (
+                <button onClick={() => printOrder(drawer as DeliveryOrder)}
+                  style={{ padding: '10px 14px', background: '#fff', border: '0.5px solid #e8ede9', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#4A90C4', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  🖨 Print
+                </button>
+              )}
               {isEdit && (
                 <button onClick={() => remove((drawer as DeliveryOrder).id)}
                   style={{ padding: '10px 14px', background: '#FCEBEB', border: '0.5px solid #F09595', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#A32D2D', cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -389,9 +585,9 @@ export default function OrdersPage() {
       </div>
 
       {/* TABLE HEADER */}
-      <div style={{ display: 'grid', gridTemplateColumns: '180px 160px 120px 120px 100px 120px 80px', gap: 12, padding: '0 16px 10px' }}>
-        {['Farm', 'Feed mill', 'Driver', 'Truck', 'Scheduled', 'Status', 'Total'].map(h => (
-          <div key={h} style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>{h}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '180px 160px 120px 120px 100px 120px 60px 40px', gap: 12, padding: '0 16px 10px' }}>
+        {['Farm', 'Feed mill', 'Driver', 'Truck', 'Scheduled', 'Status', 'Total', ''].map(h => (
+          <div key={h || 'print'} style={{ fontSize: 10, color: '#aab8c0', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>{h}</div>
         ))}
       </div>
 
@@ -410,7 +606,7 @@ export default function OrdersPage() {
           const totalKg = items.reduce((sum, i) => sum + i.kg_requested, 0)
           return (
             <div key={o.id} onClick={() => openEdit(o)}
-              style={{ display: 'grid', gridTemplateColumns: '180px 160px 120px 120px 100px 120px 80px', gap: 12, alignItems: 'center', padding: '13px 16px', background: '#fff', borderRadius: 8, border: '0.5px solid #e8ede9', borderLeft: '3px solid ' + sc.color, cursor: 'pointer' }}
+              style={{ display: 'grid', gridTemplateColumns: '180px 160px 120px 120px 100px 120px 60px 40px', gap: 12, alignItems: 'center', padding: '13px 16px', background: '#fff', borderRadius: 8, border: '0.5px solid #e8ede9', borderLeft: '3px solid ' + sc.color, cursor: 'pointer' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.06)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.boxShadow = 'none'}>
 
@@ -439,6 +635,19 @@ export default function OrdersPage() {
 
               <div style={{ fontSize: 12, fontWeight: 600, color: '#1a2530', textAlign: 'right' }}>
                 {totalKg > 0 ? (totalKg/1000).toFixed(1) + 't' : '—'}
+              </div>
+
+              {/* PRINT BUTTON */}
+              <div style={{ textAlign: 'center' }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); printOrder(o) }}
+                  title="Print delivery order"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, color: '#aab8c0', padding: 4, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#4A90C4'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = '#aab8c0'}
+                >
+                  🖨
+                </button>
               </div>
             </div>
           )
