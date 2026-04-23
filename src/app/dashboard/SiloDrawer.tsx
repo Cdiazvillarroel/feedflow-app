@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   getSiloById, getLatestReading, getReadingHistory,
@@ -37,28 +38,23 @@ function SiloGraphic({ pct, color }: { pct: number; color: string }) {
   const bodyX = 20, bodyY = 30
   const bodyW = W - 40, bodyH = H - 70
 
-  // Fill height inside the body
   const fillH = Math.round((pct / 100) * bodyH)
   const fillY  = bodyY + bodyH - fillH
 
-  // Ellipse radii for top/bottom caps
   const rx = bodyW / 2, ry = 10
   const cx = W / 2
 
   return (
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible' }}>
       <defs>
-        {/* Clip to silo body */}
         <clipPath id="silo-body-clip">
           <rect x={bodyX} y={bodyY} width={bodyW} height={bodyH} />
         </clipPath>
-        {/* Subtle shine gradient on fill */}
         <linearGradient id="fill-shine" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%"   stopColor={color} stopOpacity="0.85" />
           <stop offset="40%"  stopColor={color} stopOpacity="1"    />
           <stop offset="100%" stopColor={color} stopOpacity="0.75" />
         </linearGradient>
-        {/* Wall gradient */}
         <linearGradient id="wall-grad" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%"   stopColor="#d0dbd4" />
           <stop offset="30%"  stopColor="#f0f4f0" />
@@ -67,104 +63,36 @@ function SiloGraphic({ pct, color }: { pct: number; color: string }) {
         </linearGradient>
       </defs>
 
-      {/* ── BODY FILL (clipped) ───────────────────────────────── */}
       {pct > 0 && (
         <g clipPath="url(#silo-body-clip)">
-          {/* Fill rectangle */}
-          <rect
-            x={bodyX} y={fillY}
-            width={bodyW} height={fillH}
-            fill="url(#fill-shine)"
-            style={{ transition: 'all 0.6s ease' }}
-          />
-          {/* Animated wave on top of fill */}
-          <ellipse
-            cx={cx} cy={fillY}
-            rx={rx} ry={ry * 0.6}
-            fill={color}
-            opacity="0.6"
-            style={{ transition: 'all 0.6s ease' }}
-          />
+          <rect x={bodyX} y={fillY} width={bodyW} height={fillH} fill="url(#fill-shine)" style={{ transition: 'all 0.6s ease' }} />
+          <ellipse cx={cx} cy={fillY} rx={rx} ry={ry * 0.6} fill={color} opacity="0.6" style={{ transition: 'all 0.6s ease' }} />
         </g>
       )}
 
-      {/* ── SILO WALLS ────────────────────────────────────────── */}
-      {/* Left wall */}
       <rect x={bodyX} y={bodyY} width={3} height={bodyH} fill="#c8d4cc" />
-      {/* Right wall */}
       <rect x={bodyX + bodyW - 3} y={bodyY} width={3} height={bodyH} fill="#a8b8ac" />
-      {/* Body outline */}
-      <rect
-        x={bodyX} y={bodyY}
-        width={bodyW} height={bodyH}
-        fill="none"
-        stroke="#c8d4cc"
-        strokeWidth="1.5"
-      />
+      <rect x={bodyX} y={bodyY} width={bodyW} height={bodyH} fill="none" stroke="#c8d4cc" strokeWidth="1.5" />
 
-      {/* ── TOP CAP (dome) ────────────────────────────────────── */}
       <ellipse cx={cx} cy={bodyY} rx={rx} ry={ry} fill="#e0e8e2" stroke="#c8d4cc" strokeWidth="1" />
-      {/* Roof cone */}
-      <path
-        d={`M ${bodyX} ${bodyY} Q ${cx} ${bodyY - 28} ${bodyX + bodyW} ${bodyY}`}
-        fill="#d8e2da" stroke="#c0ccc4" strokeWidth="1"
-      />
-      {/* Roof top cap */}
+      <path d={`M ${bodyX} ${bodyY} Q ${cx} ${bodyY - 28} ${bodyX + bodyW} ${bodyY}`} fill="#d8e2da" stroke="#c0ccc4" strokeWidth="1" />
       <ellipse cx={cx} cy={bodyY - 22} rx={rx * 0.25} ry={ry * 0.4} fill="#c8d4cc" />
 
-      {/* ── BOTTOM CAP ────────────────────────────────────────── */}
-      <ellipse
-        cx={cx} cy={bodyY + bodyH}
-        rx={rx} ry={ry}
-        fill={pct > 0 ? color : '#e0e8e2'}
-        stroke="#c8d4cc" strokeWidth="1"
-        opacity={pct > 0 ? 0.8 : 1}
-      />
-      {/* Legs */}
+      <ellipse cx={cx} cy={bodyY + bodyH} rx={rx} ry={ry} fill={pct > 0 ? color : '#e0e8e2'} stroke="#c8d4cc" strokeWidth="1" opacity={pct > 0 ? 0.8 : 1} />
       {[-1, 1].map(side => (
-        <line
-          key={side}
-          x1={cx + side * (rx * 0.5)}
-          y1={bodyY + bodyH + ry}
-          x2={cx + side * (rx * 0.7)}
-          y2={H - 5}
-          stroke="#c8d4cc" strokeWidth="3" strokeLinecap="round"
-        />
+        <line key={side} x1={cx + side * (rx * 0.5)} y1={bodyY + bodyH + ry} x2={cx + side * (rx * 0.7)} y2={H - 5} stroke="#c8d4cc" strokeWidth="3" strokeLinecap="round" />
       ))}
 
-      {/* ── FILL LEVEL LABEL ──────────────────────────────────── */}
-      <text
-        x={cx} y={fillY > bodyY + 24 ? fillY - 8 : bodyY + bodyH / 2}
-        textAnchor="middle"
-        fontSize="13"
-        fontWeight="700"
-        fontFamily="-apple-system, sans-serif"
-        fill={pct > 0 ? '#fff' : '#8a9aaa'}
-      >
+      <text x={cx} y={fillY > bodyY + 24 ? fillY - 8 : bodyY + bodyH / 2} textAnchor="middle" fontSize="13" fontWeight="700" fontFamily="-apple-system, sans-serif" fill={pct > 0 ? '#fff' : '#8a9aaa'}>
         {pct.toFixed(1)}%
       </text>
 
-      {/* ── TICK MARKS on right side ──────────────────────────── */}
       {[25, 50, 75].map(tick => {
         const ty = bodyY + bodyH - (tick / 100) * bodyH
         return (
           <g key={tick}>
-            <line
-              x1={bodyX + bodyW}
-              y1={ty}
-              x2={bodyX + bodyW + 8}
-              y2={ty}
-              stroke="#aab8c0" strokeWidth="0.5"
-            />
-            <text
-              x={bodyX + bodyW + 11}
-              y={ty + 4}
-              fontSize="8"
-              fill="#aab8c0"
-              fontFamily="-apple-system, sans-serif"
-            >
-              {tick}%
-            </text>
+            <line x1={bodyX + bodyW} y1={ty} x2={bodyX + bodyW + 8} y2={ty} stroke="#aab8c0" strokeWidth="0.5" />
+            <text x={bodyX + bodyW + 11} y={ty + 4} fontSize="8" fill="#aab8c0" fontFamily="-apple-system, sans-serif">{tick}%</text>
           </g>
         )
       })}
@@ -174,12 +102,14 @@ function SiloGraphic({ pct, color }: { pct: number; color: string }) {
 
 // ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export default function SiloDrawer({
-  siloId, open, onClose,
+  siloId, open, onClose, farmId,
 }: {
   siloId: string | null
   open: boolean
   onClose: () => void
+  farmId?: string
 }) {
+  const router = useRouter()
   const [silo,    setSilo]    = useState<Silo    | null>(null)
   const [reading, setReading] = useState<Reading | null>(null)
   const [history, setHistory] = useState<Reading[]>([])
@@ -232,6 +162,20 @@ export default function SiloDrawer({
     new Date(r.recorded_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })
   )
   const chartData = chartHistory.map(r => r.level_pct)
+
+  // ── ACTION HANDLERS ─────────────────────────────────────────────────────
+  function handleViewHistory() {
+    onClose()
+    router.push(`/dashboard/silo/${siloId}`)
+  }
+
+  function handleScheduleDelivery() {
+    onClose()
+    const params = new URLSearchParams()
+    if (farmId) params.set('farm_id', farmId)
+    if (siloId) params.set('silo_id', siloId)
+    router.push(`/dashboard/logistics/orders?${params.toString()}`)
+  }
 
   return (
     <>
@@ -319,14 +263,11 @@ export default function SiloDrawer({
                 background: '#f7f9f8', borderRadius: 12, padding: '20px 16px',
                 display: 'flex', alignItems: 'center', gap: 20,
               }}>
-                {/* Silo illustration */}
                 <div style={{ flexShrink: 0 }}>
                   <SiloGraphic pct={pct} color={color} />
                 </div>
 
-                {/* Stats alongside the silo */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {/* Big kg number */}
                   <div>
                     <div style={{ fontSize: 11, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 3 }}>
                       Available
@@ -342,7 +283,6 @@ export default function SiloDrawer({
 
                   <div style={{ height: '0.5px', background: '#e8ede9' }} />
 
-                  {/* Stats grid */}
                   {[
                     { label: 'Days left',  value: String(days),              vColor: dColor },
                     { label: 'Daily use',  value: `${kgDay.toLocaleString()} kg/day` },
@@ -373,7 +313,6 @@ export default function SiloDrawer({
                   <span style={{ fontSize: 38, fontWeight: 700, color: '#fff', letterSpacing: -1 }}>{days}</span>
                   <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.45)' }}>days remaining</span>
                 </div>
-                {/* Timeline bar */}
                 <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 999, overflow: 'hidden', marginBottom: 14 }}>
                   <div style={{
                     height: '100%',
@@ -489,6 +428,36 @@ export default function SiloDrawer({
                     No reading history yet
                   </div>
                 )}
+              </div>
+
+              {/* ── ACTION BUTTONS ────────────────────────────── */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <button onClick={handleViewHistory} style={{
+                  padding: '10px 14px', background: '#fff', border: '0.5px solid #e8ede9',
+                  borderRadius: 8, fontSize: 13, color: '#1a2530', cursor: 'pointer',
+                  fontFamily: 'inherit', textAlign: 'left', fontWeight: 500,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  transition: 'all 0.15s',
+                }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#4CAF7D'; (e.currentTarget as HTMLElement).style.background = '#f4fbf7' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#e8ede9'; (e.currentTarget as HTMLElement).style.background = '#fff' }}
+                >
+                  <span>View consumption history</span>
+                  <span style={{ color: '#8a9aaa' }}>→</span>
+                </button>
+                <button onClick={handleScheduleDelivery} style={{
+                  padding: '10px 14px', background: '#fff', border: '0.5px solid #e8ede9',
+                  borderRadius: 8, fontSize: 13, color: '#1a2530', cursor: 'pointer',
+                  fontFamily: 'inherit', textAlign: 'left', fontWeight: 500,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  transition: 'all 0.15s',
+                }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#4A90C4'; (e.currentTarget as HTMLElement).style.background = '#EEF5FB' }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = '#e8ede9'; (e.currentTarget as HTMLElement).style.background = '#fff' }}
+                >
+                  <span>Schedule delivery</span>
+                  <span style={{ color: '#8a9aaa' }}>→</span>
+                </button>
               </div>
             </>
           )}
