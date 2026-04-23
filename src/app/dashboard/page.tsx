@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useFarm } from '@/app/dashboard/FarmContext'
+import SiloDrawer from './SiloDrawer'
 
 // ═══ Design Tokens ═══
 const T = {
@@ -64,7 +65,7 @@ export default function DashboardPage() {
   const [filter,  setFilter]  = useState('all')
   const [search,  setSearch]  = useState('')
   const [sort,    setSort]    = useState('level')
-  const [drawer,  setDrawer]  = useState<SiloRow | null>(null)
+  const [selectedSiloId, setSelectedSiloId] = useState<string | null>(null)
   const [insightDismissed, setInsightDismissed] = useState(false)
 
   useEffect(() => {
@@ -153,119 +154,13 @@ export default function DashboardPage() {
 
   return (
     <div style={{ fontFamily: T.font }}>
-      {/* ═══ SILO DRAWER ═══ */}
-      {drawer && (
-        <>
-          <div onClick={() => setDrawer(null)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 200, transition: 'opacity 0.25s' }} />
-          <div style={{
-            position: 'fixed', top: 0, right: 0, width: 400, height: '100vh',
-            background: T.bgCard, zIndex: 201, display: 'flex', flexDirection: 'column',
-            boxShadow: T.sh2, fontFamily: T.font,
-          }}>
-            {/* Drawer Header */}
-            <div style={{ padding: '20px 24px', borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 18, fontWeight: 600, color: T.text }}>{drawer.name}</div>
-                <div style={{ fontSize: 13, color: T.textMuted, marginTop: 2 }}>{drawer.material || '—'}</div>
-              </div>
-              <button onClick={() => setDrawer(null)} style={{
-                width: 32, height: 32, borderRadius: '50%', border: `1px solid ${T.border}`,
-                background: T.bgCard, cursor: 'pointer', fontSize: 16, color: T.textMuted,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>✕</button>
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {/* Visual Gauge + Level */}
-              <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                {/* Silo visual */}
-                <div style={{
-                  width: 64, height: 120, borderRadius: 10, border: `2px solid ${T.border}`,
-                  background: T.barTrack, position: 'relative', overflow: 'hidden', flexShrink: 0,
-                }}>
-                  <div style={{
-                    position: 'absolute', bottom: 0, left: 0, right: 0,
-                    height: `${drawer.level_pct}%`,
-                    background: levelColor(drawer.level_pct),
-                    transition: 'height 0.4s ease',
-                    borderRadius: '0 0 8px 8px',
-                  }} />
-                  <div style={{
-                    position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16, fontWeight: 700, color: T.text, fontFamily: T.mono,
-                  }}>
-                    {drawer.level_pct.toFixed(0)}%
-                  </div>
-                </div>
-                {/* Key metrics */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Days remaining</div>
-                    <div style={{ fontSize: 32, fontWeight: 700, color: daysColor(drawer.days_remaining), fontFamily: T.mono, letterSpacing: -1 }}>
-                      {drawer.days_remaining}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 2 }}>Feed available</div>
-                    <div style={{ fontSize: 18, fontWeight: 600, color: T.text, fontFamily: T.mono }}>
-                      {Math.round(drawer.kg_remaining).toLocaleString()} kg
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stats rows */}
-              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: T.r2 }}>
-                {[
-                  { k: 'Capacity',        v: `${Math.round(drawer.capacity_kg).toLocaleString()} kg` },
-                  { k: 'Daily consumption', v: `~${Math.round(drawer.capacity_kg * 0.02).toLocaleString()} kg/day` },
-                  { k: 'Sensor status',    v: drawer.sensor ? drawer.sensor.status.charAt(0).toUpperCase() + drawer.sensor.status.slice(1) : 'No sensor' },
-                  { k: 'Battery',          v: drawer.sensor ? `${drawer.sensor.battery_pct}%` : '—' },
-                  { k: 'Last reading',     v: drawer.hours_since_reading < 1 ? 'Just now' : drawer.hours_since_reading < 24 ? `${Math.round(drawer.hours_since_reading)}h ago` : `${Math.round(drawer.hours_since_reading / 24)}d ago` },
-                ].map((r, i) => (
-                  <div key={r.k} style={{
-                    display: 'flex', justifyContent: 'space-between', padding: '10px 14px',
-                    borderBottom: i < 4 ? `1px solid ${T.borderLight}` : 'none',
-                  }}>
-                    <span style={{ fontSize: 13, color: T.textMuted }}>{r.k}</span>
-                    <span style={{ fontSize: 13, fontWeight: 500, color: T.text, fontFamily: T.mono }}>{r.v}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Order estimate */}
-              <div style={{ background: T.bgCard, border: `1px solid ${T.border}`, borderRadius: T.r2, padding: '14px' }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Order estimate</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, color: T.textSecondary }}>To refill to 85%</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: T.text, fontFamily: T.mono }}>
-                    {Math.round(Math.max(0, drawer.capacity_kg * 0.85 - drawer.kg_remaining)).toLocaleString()} kg
-                  </span>
-                </div>
-              </div>
-
-              {/* Action links */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <button style={{
-                  padding: '10px 14px', background: T.bgCard, border: `1px solid ${T.border}`,
-                  borderRadius: T.r2, fontSize: 13, color: T.textSecondary, cursor: 'pointer',
-                  fontFamily: T.font, textAlign: 'left', fontWeight: 500,
-                }}>
-                  View consumption history →
-                </button>
-                <button style={{
-                  padding: '10px 14px', background: T.bgCard, border: `1px solid ${T.border}`,
-                  borderRadius: T.r2, fontSize: 13, color: T.textSecondary, cursor: 'pointer',
-                  fontFamily: T.font, textAlign: 'left', fontWeight: 500,
-                }}>
-                  Schedule delivery →
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      {/* ═══ SILO DRAWER (component) ═══ */}
+      <SiloDrawer
+        siloId={selectedSiloId}
+        open={!!selectedSiloId}
+        onClose={() => setSelectedSiloId(null)}
+        farmId={farmId}
+      />
 
       {/* ═══ HEADER ═══ */}
       <div style={{ marginBottom: 20 }}>
@@ -431,7 +326,7 @@ export default function DashboardPage() {
                 : '3px solid transparent'
 
               return (
-                <button key={s.id} onClick={() => setDrawer(s)}
+                <button key={s.id} onClick={() => setSelectedSiloId(s.id)}
                   style={{
                     display: 'grid', gridTemplateColumns: '190px 1fr 65px 75px 16px',
                     gap: 12, alignItems: 'center',
