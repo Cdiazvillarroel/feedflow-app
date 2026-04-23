@@ -9,12 +9,13 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearSca
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
 interface FeedMill    { id: string; name: string }
+interface Client      { id: string; name: string }
 interface Commodity   { id: string; name: string; category: string; price_per_tonne: number | null; stock_kg: number; min_stock_kg: number; feed_mill_id: string }
 interface Formula     { id: string; name: string; animal_type: string; feed_mill_id: string; cost_per_tonne: number | null }
 interface FormulaIng  { formula_id: string; commodity_id: string; inclusion_pct: number }
 interface AnimalGroup { id: string; name: string; type: string; count: number; farm_id: string }
 interface Feed        { id: string; name: string; material: string; kg_per_head_day: number; animal_type: string; farm_id: string }
-interface Farm        { id: string; name: string; feed_mill_id: string | null }
+interface Farm        { id: string; name: string; feed_mill_id: string | null; client_id: string | null }
 interface GroupFeed   { animal_group_id: string; feed_id: string }
 
 interface AIInsightResult {
@@ -34,6 +35,7 @@ export default function NutritionOverviewPage() {
   const { selectedMillId } = useFarm()
 
   const [mills,           setMills]           = useState<FeedMill[]>([])
+  const [clients,         setClients]         = useState<Client[]>([])
   const [commodities,     setCommodities]     = useState<Commodity[]>([])
   const [formulas,        setFormulas]        = useState<Formula[]>([])
   const [formulaIngs,     setFormulaIngs]     = useState<FormulaIng[]>([])
@@ -47,14 +49,19 @@ export default function NutritionOverviewPage() {
   const [aiError,         setAiError]         = useState('')
   const [forecastHorizon, setForecastHorizon] = useState(14)
 
-  useEffect(() => { loadAll() }, [selectedMillId])
+  // NEW: client and farm filters
+  const [selectedClientId, setSelectedClientId] = useState('')
+  const [selectedFarmId,   setSelectedFarmId]   = useState('')
+
+  useEffect(() => { loadAll() }, [selectedMillId, selectedClientId, selectedFarmId])
 
   async function loadAll() {
     setLoading(true)
     setAiInsight(null)
 
-    const [millsR, commR, formulasR, ingR, farmsR] = await Promise.all([
+    const [millsR, clientsR, commR, formulasR, ingR, farmsR] = await Promise.all([
       supabase.from('feed_mills').select('id, name').order('name'),
+      supabase.from('clients').select('id, name').order('name'),
       selectedMillId
         ? supabase.from('commodities').select('*').eq('feed_mill_id', selectedMillId).eq('active', true)
         : supabase.from('commodities').select('*').eq('active', true),
@@ -62,19 +69,29 @@ export default function NutritionOverviewPage() {
         ? supabase.from('feed_formulas').select('id, name, animal_type, feed_mill_id, cost_per_tonne').eq('feed_mill_id', selectedMillId).eq('active', true)
         : supabase.from('feed_formulas').select('id, name, animal_type, feed_mill_id, cost_per_tonne').eq('active', true),
       supabase.from('formula_ingredients').select('formula_id, commodity_id, inclusion_pct'),
-      supabase.from('farms').select('id, name, feed_mill_id'),
+      supabase.from('farms').select('id, name, feed_mill_id, client_id'),
     ])
 
     const farmList = farmsR.data || []
     setMills(millsR.data || [])
+    setClients(clientsR.data || [])
     setCommodities(commR.data || [])
     setFormulas(formulasR.data || [])
     setFormulaIngs(ingR.data || [])
     setFarms(farmList)
 
-    const relevantFarmIds = selectedMillId
-      ? farmList.filter(f => f.feed_mill_id === selectedMillId).map(f => f.id)
-      : farmList.map(f => f.id)
+    // NEW: cascade filter mill → client → farm
+    let filteredFarms = farmList
+    if (selectedMillId) {
+      filteredFarms = filteredFarms.filter(f => f.feed_mill_id === selectedMillId)
+    }
+    if (selectedClientId) {
+      filteredFarms = filteredFarms.filter(f => f.client_id === selectedClientId)
+    }
+    if (selectedFarmId) {
+      filteredFarms = filteredFarms.filter(f => f.id === selectedFarmId)
+    }
+    const relevantFarmIds = filteredFarms.map(f => f.id)
 
     if (relevantFarmIds.length > 0) {
       const [groupsR, feedsR, agfR] = await Promise.all([
@@ -106,6 +123,15 @@ export default function NutritionOverviewPage() {
 
   const totalAnimals = animalGroups.reduce((s, g) => s + g.count, 0)
 
+  // NEW: compute filtered farms count for display
+  const filteredFarmsCount = useMemo(() => {
+    let ff = farms
+    if (selectedMillId) ff = ff.filter(f => f.feed_mill_id === selectedMillId)
+    if (selectedClientId) ff = ff.filter(f => f.client_id === selectedClientId)
+    if (selectedFarmId) ff = ff.filter(f => f.id === selectedFarmId)
+    return ff.length
+  }, [farms, selectedMillId, selectedClientId, selectedFarmId])
+
   const animalsByType = useMemo(() => {
     const map: Record<string, number> = {}
     animalGroups.forEach(g => { map[g.type] = (map[g.type] || 0) + g.count })
@@ -127,13 +153,11 @@ export default function NutritionOverviewPage() {
       const millFarms   = farms.filter(fa => fa.feed_mill_id === f.feed_mill_id)
       const millFarmIds = millFarms.map(fa => fa.id)
 
-      // All animal groups of this type across ALL farms of this mill
       const matchingGroups = animalGroups.filter(g =>
         g.type === f.animal_type && millFarmIds.includes(g.farm_id)
       )
       if (matchingGroups.length === 0) return { ...f, dailyKg: 0, totalKg: 0, totalCost: 0 }
 
-      // Global avg kg/head/day across ALL feeds of this type in this mill
       const allMillFeeds = feeds.filter(feed =>
         feed.animal_type === f.animal_type && millFarmIds.includes(feed.farm_id)
       )
@@ -144,7 +168,6 @@ export default function NutritionOverviewPage() {
       if (globalAvgKgPerHead === 0) return { ...f, dailyKg: 0, totalKg: 0, totalCost: 0 }
 
       const dailyKg = matchingGroups.reduce((total, group) => {
-        // Priority 1: assigned feeds via animal_group_feeds
         const assignedFeedIds = groupFeeds
           .filter(gf => gf.animal_group_id === group.id)
           .map(gf => gf.feed_id)
@@ -154,13 +177,12 @@ export default function NutritionOverviewPage() {
           const assignedFeeds = feeds.filter(feed => assignedFeedIds.includes(feed.id))
           kgPerHead = assignedFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0)
         } else {
-          // Priority 2: feeds of same type in same farm
           const farmFeeds = feeds.filter(feed =>
             feed.farm_id === group.farm_id && feed.animal_type === group.type
           )
           kgPerHead = farmFeeds.length > 0
             ? farmFeeds.reduce((s, feed) => s + feed.kg_per_head_day, 0) / farmFeeds.length
-            : globalAvgKgPerHead // Priority 3: mill-wide average
+            : globalAvgKgPerHead
         }
 
         return total + kgPerHead * group.count
@@ -175,28 +197,43 @@ export default function NutritionOverviewPage() {
 
   const topFormulas = [...formulas].filter(f => f.cost_per_tonne).sort((a, b) => (b.cost_per_tonne || 0) - (a.cost_per_tonne || 0)).slice(0, 5)
 
+  // NEW: filter description for display
+  const filterLabel = useMemo(() => {
+    const parts: string[] = []
+    if (selectedMillId) parts.push(millName(selectedMillId))
+    else parts.push('All mills')
+    if (selectedClientId) {
+      const c = clients.find(c => c.id === selectedClientId)
+      if (c) parts.push(c.name)
+    }
+    if (selectedFarmId) {
+      const f = farms.find(f => f.id === selectedFarmId)
+      if (f) parts.push(f.name)
+    }
+    return parts.join(' · ')
+  }, [selectedMillId, selectedClientId, selectedFarmId, mills, clients, farms])
+
   const QUICK_LINKS = [
     { href: '/dashboard/nutrition/library',            label: 'Commodity Library', icon: '🌾', desc: `${commodities.length} commodities · ${lowStockItems.length} low stock`, color: '#4CAF7D' },
     { href: '/dashboard/nutrition/formulas',           label: 'Formula Manager',   icon: '🧪', desc: `${formulas.length} formulas · avg $${avgCost}/t`,                       color: '#4A90C4' },
-    { href: '/dashboard/nutrition/forecast_nutrition', label: 'Demand Forecast',   icon: '📊', desc: `${(dailyFeedKg / 1000).toFixed(1)}t/day · ${farms.filter(f => !selectedMillId || f.feed_mill_id === selectedMillId).length} farms`, color: '#EF9F27' },
+    { href: '/dashboard/nutrition/forecast_nutrition', label: 'Demand Forecast',   icon: '📊', desc: `${(dailyFeedKg / 1000).toFixed(1)}t/day · ${filteredFarmsCount} farms`, color: '#EF9F27' },
   ]
 
   async function generateAIInsight() {
     setAiLoading(true); setAiError('')
     try {
-      const millLabel = selectedMillId ? millName(selectedMillId) : 'All mills'
       const prompt = `You are a livestock nutrition analyst for FeedFlow, an AgTech platform.
 
 Analyze this feed mill nutrition data and provide a concise, actionable insight in JSON format.
 
-MILL: ${millLabel}
+FILTER: ${filterLabel}
 COMMODITIES: ${commodities.length} total · ${criticalStock.length} critical stock · ${lowStockItems.length} low stock · ${okStock.length} OK
 CRITICAL STOCK ITEMS: ${criticalStock.map(c => `${c.name} (${(c.stock_kg/1000).toFixed(1)}t stock, min ${(c.min_stock_kg/1000).toFixed(1)}t)`).join(', ') || 'None'}
 LOW STOCK ITEMS: ${lowStockItems.filter(c => c.stock_kg > c.min_stock_kg * 0.5).map(c => `${c.name} (${(c.stock_kg/1000).toFixed(1)}t)`).join(', ') || 'None'}
 FORMULAS: ${formulas.length} active · avg cost $${avgCost}/t · range $${minCost}–$${maxCost}/t
 MOST EXPENSIVE FORMULA: ${topFormulas[0]?.name || '—'} at $${topFormulas[0]?.cost_per_tonne || 0}/t
 CHEAPEST FORMULA: ${topFormulas[topFormulas.length-1]?.name || '—'} at $${topFormulas[topFormulas.length-1]?.cost_per_tonne || 0}/t
-FARMS SERVED: ${farms.filter(f => !selectedMillId || f.feed_mill_id === selectedMillId).length}
+FARMS SERVED: ${filteredFarmsCount}
 ANIMAL GROUPS: ${animalGroups.length} groups · ${totalAnimals.toLocaleString()} animals total
 ANIMAL BREAKDOWN: ${Object.entries(animalsByType).map(([t, c]) => `${t}: ${c.toLocaleString()}`).join(', ')}
 DAILY FEED DEMAND: ${(dailyFeedKg/1000).toFixed(1)} tonnes/day
@@ -226,6 +263,23 @@ Respond ONLY with valid JSON, no markdown, no explanation:
     setAiLoading(false)
   }
 
+  // NEW: available clients filtered by selected mill
+  const availableClients = useMemo(() => {
+    if (!selectedMillId) return clients
+    const millFarmClientIds = farms
+      .filter(f => f.feed_mill_id === selectedMillId && f.client_id)
+      .map(f => f.client_id!)
+    return clients.filter(c => millFarmClientIds.includes(c.id))
+  }, [clients, farms, selectedMillId])
+
+  // NEW: available farms filtered by selected mill + client
+  const availableFarms = useMemo(() => {
+    let ff = farms
+    if (selectedMillId) ff = ff.filter(f => f.feed_mill_id === selectedMillId)
+    if (selectedClientId) ff = ff.filter(f => f.client_id === selectedClientId)
+    return ff
+  }, [farms, selectedMillId, selectedClientId])
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#8a9aaa', fontSize: 14 }}>
       <div style={{ textAlign: 'center' }}>
@@ -241,7 +295,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
       <div className="page-header">
         <div>
           <div className="page-title">Nutrition Manager</div>
-          <div className="page-sub">{selectedMillId ? millName(selectedMillId) : 'All mills'} · Commodities · Formulas · Demand Forecast</div>
+          <div className="page-sub">{filterLabel} · Commodities · Formulas · Demand Forecast</div>
         </div>
         <div className="page-actions">
           {criticalStock.length > 0 && (
@@ -257,12 +311,48 @@ Respond ONLY with valid JSON, no markdown, no explanation:
         </div>
       </div>
 
+      {/* NEW: CLIENT & FARM FILTERS */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
+        <div>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Client</label>
+          <select
+            value={selectedClientId}
+            onChange={e => { setSelectedClientId(e.target.value); setSelectedFarmId('') }}
+            style={{ padding: '7px 12px', border: '0.5px solid #c8d8cc', borderRadius: 7, fontSize: 13, color: '#1a2530', background: '#fff', fontFamily: 'inherit', outline: 'none', minWidth: 200 }}
+          >
+            <option value="">All clients</option>
+            {availableClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: '#8a9aaa', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5 }}>Farm</label>
+          <select
+            value={selectedFarmId}
+            onChange={e => setSelectedFarmId(e.target.value)}
+            style={{ padding: '7px 12px', border: '0.5px solid #c8d8cc', borderRadius: 7, fontSize: 13, color: '#1a2530', background: '#fff', fontFamily: 'inherit', outline: 'none', minWidth: 200 }}
+          >
+            <option value="">All farms</option>
+            {availableFarms.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+        </div>
+        {(selectedClientId || selectedFarmId) && (
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <button
+              onClick={() => { setSelectedClientId(''); setSelectedFarmId('') }}
+              style={{ padding: '7px 12px', border: '0.5px solid #e8ede9', borderRadius: 7, fontSize: 12, color: '#8a9aaa', background: '#f7f9f8', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ✕ Clear filters
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* SUMMARY */}
       <div className="summary-row">
         <div className="sum-card"><div className="sum-label">Commodities</div><div className="sum-val">{commodities.length}</div><div className="sum-sub">{lowStockItems.length} low stock</div></div>
         <div className="sum-card"><div className="sum-label">Formulas</div><div className="sum-val" style={{ color: '#4A90C4' }}>{formulas.length}</div><div className="sum-sub">Avg ${avgCost}/tonne</div></div>
-        <div className="sum-card"><div className="sum-label">Daily feed demand</div><div className="sum-val" style={{ color: '#EF9F27' }}>{(dailyFeedKg / 1000).toFixed(1)}t</div><div className="sum-sub">{farms.filter(f => !selectedMillId || f.feed_mill_id === selectedMillId).length} farms · {animalGroups.length} groups</div></div>
-        <div className="sum-card"><div className="sum-label">Total animals</div><div className="sum-val green">{totalAnimals.toLocaleString()}</div><div className="sum-sub">Across all farms</div></div>
+        <div className="sum-card"><div className="sum-label">Daily feed demand</div><div className="sum-val" style={{ color: '#EF9F27' }}>{(dailyFeedKg / 1000).toFixed(1)}t</div><div className="sum-sub">{filteredFarmsCount} farms · {animalGroups.length} groups</div></div>
+        <div className="sum-card"><div className="sum-label">Total animals</div><div className="sum-val green">{totalAnimals.toLocaleString()}</div><div className="sum-sub">{selectedFarmId ? farms.find(f => f.id === selectedFarmId)?.name : selectedClientId ? clients.find(c => c.id === selectedClientId)?.name : 'Across all farms'}</div></div>
       </div>
 
       {/* AI LOADING */}
@@ -290,7 +380,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
               </div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>AI Nutrition Analysis</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>Powered by Claude AI · {selectedMillId ? millName(selectedMillId) : 'All mills'}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>Powered by Claude AI · {filterLabel}</div>
               </div>
             </div>
             <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 10px', borderRadius: 10, background: 'rgba(76,175,125,0.15)', color: '#4CAF7D', border: '0.5px solid rgba(76,175,125,0.3)' }}>Claude AI</span>
@@ -459,7 +549,7 @@ Respond ONLY with valid JSON, no markdown, no explanation:
           ) : (
             <div style={{ color: '#aab8c0', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>📊</div>
-              No formula demand data available for this mill.
+              No formula demand data available{selectedFarmId ? ' for this farm' : selectedClientId ? ' for this client' : ' for this mill'}.
             </div>
           )}
         </div>
@@ -500,10 +590,10 @@ Respond ONLY with valid JSON, no markdown, no explanation:
       <div className="card">
         <div className="card-header">
           <div className="card-title">Animals by type</div>
-          <span style={{ fontSize: 11, color: '#aab8c0' }}>{totalAnimals.toLocaleString()} total · {farms.filter(f => !selectedMillId || f.feed_mill_id === selectedMillId).length} farms</span>
+          <span style={{ fontSize: 11, color: '#aab8c0' }}>{totalAnimals.toLocaleString()} total · {filteredFarmsCount} farms</span>
         </div>
         {Object.keys(animalsByType).length === 0 ? (
-          <div style={{ color: '#aab8c0', fontSize: 13, padding: '20px 0' }}>No animal groups found.</div>
+          <div style={{ color: '#aab8c0', fontSize: 13, padding: '20px 0' }}>No animal groups found{selectedFarmId ? ' for this farm' : selectedClientId ? ' for this client' : ''}.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
             {Object.entries(animalsByType).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
